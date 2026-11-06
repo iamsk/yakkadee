@@ -131,6 +131,11 @@ def check_required_files(errors: list[str]) -> None:
 
     for path in sorted(ROOT.glob("*.md")):
         if path.name not in ROOT_MARKDOWN_ALLOWLIST:
+            ignored = subprocess.run(
+                ["git", "check-ignore", "-q", path.name], cwd=ROOT
+            )
+            if ignored.returncode == 0:
+                continue
             errors.append(
                 f"{path.name}: root Markdown must move to docs/ or .github/"
             )

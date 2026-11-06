@@ -75,6 +75,19 @@ run_static_checks() {
             -o "${test_dir}/test_demo_${demo}_runtime"
         "${test_dir}/test_demo_${demo}_runtime"
     done
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_yakka_state.c main/yakka_state.c \
+        -o "${test_dir}/test_yakka_state"
+    "${test_dir}/test_yakka_state"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_audio_energy.c main/audio_energy.c -lm \
+        -o "${test_dir}/test_audio_energy"
+    "${test_dir}/test_audio_energy"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_confetti.c main/confetti.c -lm \
+        -o "${test_dir}/test_confetti"
+    "${test_dir}/test_confetti"
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_yakka_font.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_battery_profile.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_deep_sleep_contract.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_key_wake_contract.py

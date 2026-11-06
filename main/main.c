@@ -1,279 +1,244 @@
-// main/main.c —— FoloToy AI Passport BSP 驱动参考示例:初始化 + 菜单 + 按键分发。
-//
-// 按键语义(全局统一):
-//   上/下 短按   菜单中=移动选中项;演示页中=该页自定义
-//   确定  短按   菜单中=进入选中项;演示页中=该页自定义
-//   确定  长按   演示页中=返回菜单(由本文件统一拦截)
-#include "bsp_i2c.h"
-#include "bsp_display.h"
-#include "bsp_button.h"
+// main/main.c
+// Yakka Dee 口袋开口机 —— 主程序入口与事件循环调度
+#include "audio_player.h"
 #include "bsp_audio.h"
 #include "bsp_battery.h"
-#include "bsp_pins.h"      // 错误日志里要打印 BSP_LCD_* 引脚号
-#include "demo.h"
-#include "demo_navigation.h"
+#include "bsp_button.h"
+#include "bsp_display.h"
+#include "bsp_i2c.h"
+#include "bsp_pins.h"
 #include "key_guard.h"
-#include "ui_pixel.h"
-#include "lvgl.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "ui_yakka.h"
+#include "yakka_assets.h"
+#include "yakka_state.h"
 
-static const char *TAG = "main";
+static const char *TAG = "yakka_dee";
 
-static const demo_entry_t DEMOS[] = {
-    { .name = "Display", .enter = demo_display_enter, .exit = demo_display_exit,
-      .key = demo_display_key },
-    { .name = "Button", .enter = demo_button_enter, .exit = demo_button_exit,
-      .key = demo_button_key },
-    { .name = "Audio", .enter = demo_audio_enter, .exit = demo_audio_exit,
-      .key = demo_audio_key, .start = demo_audio_start, .stop = demo_audio_stop },
-    { .name = "Battery", .enter = demo_battery_enter, .exit = demo_battery_exit,
-      .key = demo_battery_key },
-    { .name = "Wi-Fi", .enter = demo_wifi_enter, .exit = demo_wifi_exit,
-      .key = demo_wifi_key, .start = demo_wifi_start, .stop = demo_wifi_stop },
-    { .name = "BLE", .enter = demo_ble_enter, .exit = demo_ble_exit,
-      .key = demo_ble_key, .start = demo_ble_start, .stop = demo_ble_stop },
-    { .name = "Low Power", .enter = demo_low_power_enter, .exit = demo_low_power_exit,
-      .key = demo_low_power_key, .start = demo_low_power_start, .stop = demo_low_power_stop },
-};
-#define DEMO_COUNT (sizeof(DEMOS) / sizeof(DEMOS[0]))
-#define INPUT_QUEUE_DEPTH 8
+#define EVENT_QUEUE_DEPTH 16
+#define EYE_CARE_BACKLIGHT_PERCENT 25  // 严格锁死 25% 护眼柔和背光 (PRD 6.4)
+#define KEY_GUARD_MAX_US (10LL * 1000 * 1000)
+
+typedef enum {
+    EV_TICK,
+    EV_BUTTON,
+    EV_VOICE,
+} event_type_t;
 
 typedef struct {
-    bsp_btn_t btn;
-    bsp_btn_ev_t event;
-} input_event_t;
+    event_type_t type;
+    int btn;
+    bool is_press;
+    bool is_click;
+} app_event_t;
 
-// 各外设初始化结果:失败的项在菜单里标 [FAIL] 且不允许进入。
-static bool s_ok[DEMO_COUNT];
-
-static lv_obj_t *s_menu_scr;
-static lv_obj_t *s_cards[DEMO_COUNT];
-static lv_obj_t *s_rows[DEMO_COUNT];
-static lv_obj_t *s_mascot;
-static demo_navigation_t s_navigation;
-static QueueHandle_t s_input_queue;
-static TaskHandle_t s_input_task;
-static volatile bool s_input_ready;
-
-static void menu_refresh(void) {
-    for (size_t i = 0; i < DEMO_COUNT; i++) {
-        lv_label_set_text_fmt(s_rows[i], "%s%s",
-                              DEMOS[i].name,
-                              s_ok[i] ? "" : "  [FAIL]");
-        ui_pixel_set_selected(s_cards[i], i == s_navigation.selected, s_ok[i]);
-        lv_obj_set_style_text_color(s_rows[i],
-            s_ok[i] ? lv_color_hex(UI_INK) : lv_color_hex(0x7A2020), 0);
-    }
-}
-
-static void menu_build(void) {
-    s_menu_scr = ui_pixel_screen_create("FoloToy");
-
-    for (size_t i = 0; i < DEMO_COUNT; i++) {
-        int x = 11 + (int)(i % 2) * 112;
-        int y = 52 + (int)(i / 2) * 47;
-        s_cards[i] = ui_pixel_panel_create(s_menu_scr, x, y, 102, 40, UI_PAPER);
-        s_rows[i] = lv_label_create(s_cards[i]);
-        lv_obj_set_style_text_font(s_rows[i], &lv_font_montserrat_14, 0);
-        lv_obj_set_style_text_align(s_rows[i], LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(s_rows[i]);
-    }
-
-    s_mascot = ui_pixel_mascot_create(s_menu_scr, 101, 242);
-
-    menu_refresh();
-    lv_screen_load(s_menu_scr);
-}
-
-static void enter_menu(void) {
-    menu_build();
-}
-
-static demo_nav_input_t navigation_input(bsp_btn_t btn, bsp_btn_ev_t event) {
-    if (event == BSP_BTN_LONG && btn == BSP_BTN_OK) return DEMO_NAV_INPUT_OK_LONG;
-    if (event != BSP_BTN_CLICK) return DEMO_NAV_INPUT_OTHER;
-    if (btn == BSP_BTN_UP) return DEMO_NAV_INPUT_UP_CLICK;
-    if (btn == BSP_BTN_DOWN) return DEMO_NAV_INPUT_DOWN_CLICK;
-    if (btn == BSP_BTN_OK) return DEMO_NAV_INPUT_OK_CLICK;
-    return DEMO_NAV_INPUT_OTHER;
-}
-
-static void process_input(const input_event_t *input) {
-    demo_nav_input_t nav_input = navigation_input(input->btn, input->event);
-
-    if (s_navigation.active >= 0) {
-        demo_nav_result_t result = demo_navigation_handle(&s_navigation, nav_input, true);
-        const demo_entry_t *demo = &DEMOS[result.index];
-        if (result.action == DEMO_NAV_ACTION_EXIT) {
-            esp_err_t e = demo->stop ? demo->stop() : ESP_OK;
-            if (e != ESP_OK) {
-                ESP_LOGE(TAG, "%s 页面停止失败: %s", demo->name, esp_err_to_name(e));
-                return;
-            }
-            if (!bsp_lvgl_lock(500)) return;
-            demo->exit();
-            demo_navigation_complete_exit(&s_navigation);
-            enter_menu();
-            bsp_lvgl_unlock();
-        } else if (result.action == DEMO_NAV_ACTION_FORWARD) {
-            demo->key(input->btn, input->event);
-        }
-        return;
-    }
-
-    if (nav_input == DEMO_NAV_INPUT_OTHER || nav_input == DEMO_NAV_INPUT_OK_LONG) return;
-    if (!bsp_lvgl_lock(500)) return;
-    demo_nav_result_t result = demo_navigation_handle(
-        &s_navigation, nav_input, s_ok[s_navigation.selected]);
-    if (result.action == DEMO_NAV_ACTION_REFRESH) {
-        menu_refresh();
-        ui_pixel_mascot_jump(s_mascot);
-    } else if (result.action == DEMO_NAV_ACTION_ENTER) {
-        const demo_entry_t *demo = &DEMOS[result.index];
-        ui_pixel_mascot_jump(s_mascot);
-        lv_obj_delete(s_menu_scr);
-        s_menu_scr = NULL;
-        s_mascot = NULL;
-        demo->enter();
-        bsp_lvgl_unlock();
-
-        esp_err_t e = demo->start ? demo->start() : ESP_OK;
-        if (e != ESP_OK) {
-            ESP_LOGE(TAG, "%s 页面启动失败: %s", demo->name, esp_err_to_name(e));
-        }
-        return;
-    }
-    bsp_lvgl_unlock();
-}
-
-static void input_task(void *arg) {
-    (void)arg;
-    input_event_t input;
-    for (;;) {
-        if (xQueueReceive(s_input_queue, &input, portMAX_DELAY) == pdTRUE) {
-            process_input(&input);
-        }
-    }
-}
-
-static esp_err_t input_dispatch_init(void) {
-    s_input_queue = xQueueCreate(INPUT_QUEUE_DEPTH, sizeof(input_event_t));
-    if (!s_input_queue) return ESP_ERR_NO_MEM;
-    if (xTaskCreate(input_task, "demo_input", 4096, NULL, 5, &s_input_task) != pdPASS) {
-        vQueueDelete(s_input_queue);
-        s_input_queue = NULL;
-        return ESP_ERR_NO_MEM;
-    }
-    return ESP_OK;
-}
-
-static void input_dispatch_deinit(void) {
-    s_input_ready = false;
-    if (s_input_task) {
-        vTaskDelete(s_input_task);
-        s_input_task = NULL;
-    }
-    if (s_input_queue) {
-        vQueueDelete(s_input_queue);
-        s_input_queue = NULL;
-    }
-}
-
-// Waking from deep sleep by key reboots the chip while that key is still held: the
-// button component starts a few hundred milliseconds later, registers a press that
-// is already down, and grades it a long press once it has been down for its
-// threshold (500 ms here), so an unintended action fires almost immediately. Drop
-// key actions until that press comes up; the deadline is only a safety net so a
-// stuck key cannot leave the pad dead. The state machine lives in key_guard.h so it
-// can be unit-tested without the rest of the demo.
-#define KEY_GUARD_MAX_US (10LL * 1000 * 1000)
+static yakka_machine_t s_machine;
+static QueueHandle_t s_event_queue = NULL;
 static key_guard_t s_key_guard;
+static volatile bool s_input_ready = false;
 
-// button callbacks run on the shared esp_timer task; enqueue only and return immediately.
 static void on_key(bsp_btn_t btn, bsp_btn_ev_t ev, void *user) {
     (void)user;
-    // Consume the guard before the readiness check: a release can arrive after the
-    // post-init voltage sample but before input dispatch is ready, and dropping it
-    // here would leave the guard armed to swallow the next real press.
     const bool was_armed = s_key_guard.armed;
     if (key_guard_consume(&s_key_guard, ev == BSP_BTN_RELEASE, esp_timer_get_time())) {
-        // The release and the deadline both arrive on this task; log the disarm
-        // transition once it happens.
         if (was_armed && !s_key_guard.armed) {
             ESP_LOGI(TAG, "唤醒键已松手,按键恢复响应");
         }
         return;
     }
-    if (!s_input_ready || !s_input_queue) return;
-    const input_event_t input = { .btn = btn, .event = ev };
-    (void)xQueueSend(s_input_queue, &input, 0);
+    if (!s_input_ready || !s_event_queue) return;
+
+    app_event_t event;
+    event.type = EV_BUTTON;
+    event.btn = (int)btn;
+    event.is_press = (ev == BSP_BTN_PRESS);
+    event.is_click = (ev == BSP_BTN_CLICK);
+
+    // 仅捕获 PRESS、CLICK 以及 RELEASE (用于双键释放判定)
+    if (ev == BSP_BTN_PRESS || ev == BSP_BTN_CLICK || ev == BSP_BTN_RELEASE) {
+        if (ev == BSP_BTN_RELEASE) {
+            event.is_press = false;
+            event.is_click = false;
+        }
+        (void)xQueueSend(s_event_queue, &event, 0);
+    }
+}
+
+static void on_voice_detected_cb(void *user) {
+    (void)user;
+    if (!s_event_queue) return;
+    app_event_t event = { .type = EV_VOICE };
+    (void)xQueueSend(s_event_queue, &event, 0);
+}
+
+static void execute_actions(uint32_t actions, int battery_soc, int battery_mv) {
+    if (actions == 0) return;
+
+    // 1. 背光控制 (睡午觉断电黑屏 vs 正常护眼亮度)
+    if (actions & (1u << YAKKA_ACTION_SET_BACKLIGHT)) {
+        if (s_machine.state == YAKKA_STATE_NAP_TIME && s_machine.nap_screen_dimmed) {
+            ESP_LOGI(TAG, "Dee 睡午觉，关闭背光熄屏");
+            bsp_display_backlight(0);
+        } else {
+            bsp_display_backlight(EYE_CARE_BACKLIGHT_PERCENT);
+        }
+    }
+
+    // 2. 麦克风控制
+    if (actions & (1u << YAKKA_ACTION_START_MIC)) {
+        audio_sens_t sens = (audio_sens_t)s_machine.mic_sensitivity;
+        audio_player_start_mic(on_voice_detected_cb, NULL, sens);
+    }
+    if (actions & (1u << YAKKA_ACTION_STOP_MIC)) {
+        audio_player_stop_mic();
+    }
+
+    // 3. 音效播放
+    if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_POP)) {
+        yakka_pcm_asset_t a = yakka_asset_audio_pop();
+        audio_player_play_pop(a.data, a.size);
+    } else {
+        yakka_action_t sound_act = YAKKA_ACTION_NONE;
+        if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_BOOT)) sound_act = YAKKA_ACTION_PLAY_AUDIO_BOOT;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO)) sound_act = YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_CONTRAST_1)) sound_act = YAKKA_ACTION_PLAY_AUDIO_CONTRAST_1;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_CONTRAST_2)) sound_act = YAKKA_ACTION_PLAY_AUDIO_CONTRAST_2;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_CONTRAST_3)) sound_act = YAKKA_ACTION_PLAY_AUDIO_CONTRAST_3;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_QUESTION)) sound_act = YAKKA_ACTION_PLAY_AUDIO_QUESTION;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_SUCCESS)) sound_act = YAKKA_ACTION_PLAY_AUDIO_SUCCESS;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_RETRY)) sound_act = YAKKA_ACTION_PLAY_AUDIO_RETRY;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_SKIP)) sound_act = YAKKA_ACTION_PLAY_AUDIO_SKIP;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_NAP)) sound_act = YAKKA_ACTION_PLAY_AUDIO_NAP;
+        else if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_PARENT_ON)) sound_act = YAKKA_ACTION_PLAY_AUDIO_PARENT_ON;
+
+        if (sound_act != YAKKA_ACTION_NONE) {
+            yakka_pcm_asset_t a = yakka_asset_get_audio(s_machine.current_vocab, sound_act);
+            if (a.data && a.size > 0) {
+                audio_player_play(a.data, a.size, true);
+            }
+        }
+    }
+
+    // 4. UI 界面刷新 (持 LVGL 锁)
+    if (actions & (1u << YAKKA_ACTION_UPDATE_UI)) {
+        if (bsp_lvgl_lock(500)) {
+            ui_yakka_update(&s_machine, battery_soc, battery_mv);
+            bsp_lvgl_unlock();
+        }
+    }
 }
 
 void app_main(void) {
-    ESP_LOGI(TAG, "FoloToy AI Passport BSP demo 启动");
+    ESP_LOGI(TAG, "===========================================");
+    ESP_LOGI(TAG, "  Yakka Dee 口袋开口机 (Pocket Talker) v1.0 ");
+    ESP_LOGI(TAG, "  100%% 纯离线 / 零按键开机即玩 / 护眼暖色 UI  ");
+    ESP_LOGI(TAG, "===========================================");
+
+    // 1. 初始化硬件总线与屏幕
     const uint32_t wake_causes = esp_sleep_get_wakeup_causes();
-    if (wake_causes & ~(1u << ESP_SLEEP_WAKEUP_UNDEFINED)) {
-        ESP_LOGI(TAG, "休眠唤醒原因位图: 0x%02x", (unsigned)wake_causes);
-    }
-    // 按键唤醒时,那颗键在整个启动期间还按着。先挡住它的动作(见 on_key)。
     if (wake_causes & (1u << ESP_SLEEP_WAKEUP_GPIO)) {
         key_guard_arm(&s_key_guard, esp_timer_get_time(), KEY_GUARD_MAX_US);
-        ESP_LOGI(TAG, "按键唤醒:先屏蔽按键动作,直到那颗键松手");
+        ESP_LOGI(TAG, "按键唤醒:先屏蔽按键动作,直到唤醒键松手");
     }
 
     bsp_i2c_init();
-    bsp_i2c_scan();
 
-    // 屏幕是本 demo 的 UI 载体,失败就没有菜单可言 —— 打清楚日志后退出,
-    // 不做"串口菜单"降级(那会让本文件复杂一倍,违背参考示例的初衷)。
     if (bsp_display_init() != ESP_OK || !bsp_lvgl_init()) {
-        ESP_LOGE(TAG, "显示/LVGL 初始化失败,demo 无法继续。"
-                      "检查 SPI 接线(MOSI=%d SCLK=%d CS=%d DC=%d BL=%d)",
-                 BSP_LCD_MOSI, BSP_LCD_SCLK, BSP_LCD_CS, BSP_LCD_DC, BSP_LCD_BL);
+        ESP_LOGE(TAG, "显示屏/LVGL 初始化失败，无法启动");
         return;
     }
-    bsp_display_backlight(100);
 
-    demo_navigation_init(&s_navigation, DEMO_COUNT);
+    // 护眼底层光学控制: 锁定 25% 舒适背光
+    bsp_display_backlight(EYE_CARE_BACKLIGHT_PERCENT);
 
-    // 其余外设单项失败不阻塞:菜单里标 [FAIL],其他项照常可测。
-    s_ok[0] = true;                                   // Display 已确认可用
-    esp_err_t input_err = input_dispatch_init();
-    esp_err_t button_err = input_err == ESP_OK
-                         ? bsp_button_init(on_key, NULL)
-                         : ESP_ERR_INVALID_STATE;
-    s_ok[1] = input_err == ESP_OK && button_err == ESP_OK;
-    if (input_err != ESP_OK) {
-        ESP_LOGE(TAG, "按键事件任务创建失败: %s", esp_err_to_name(input_err));
-    } else if (button_err != ESP_OK) {
-        ESP_LOGE(TAG, "按键初始化失败: %s", esp_err_to_name(button_err));
-        input_dispatch_deinit();
+    // 2. 初始化音频与电池
+    bsp_audio_init();
+    bsp_battery_init();
+
+    // 3. 初始化状态机
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+    yakka_machine_init(&s_machine, now_ms);
+
+    // 4. 初始化音频引擎
+    audio_player_init(s_machine.volume);
+
+    // 5. 初始化 Yakka 护眼图形界面
+    if (bsp_lvgl_lock(1000)) {
+        ui_yakka_init();
+        ui_yakka_update(&s_machine, 100, 4100);
+        bsp_lvgl_unlock();
+    }
+
+    // 6. 注册按键与唤醒守卫同步
+    s_event_queue = xQueueCreate(EVENT_QUEUE_DEPTH, sizeof(app_event_t));
+    if (bsp_button_init(on_key, NULL) != ESP_OK) {
+        ESP_LOGW(TAG, "按键初始化失败或重叠");
     } else if (s_key_guard.armed) {
-        // 若唤醒键在按键驱动启动前就已松手,组件不会产生 release 事件,守卫会一直
-        // 拦到兜底。初始化完成后按真实电压同步一次:已松手立即撤防。
         const bool released = bsp_button_read_mv() >= BSP_BTN_MV_RELEASED_MIN;
         key_guard_sync_released(&s_key_guard, released);
-        if (!s_key_guard.armed) {
-            ESP_LOGI(TAG, "唤醒键在按键驱动启动前已松手,提前撤防");
+    }
+    s_input_ready = true;
+
+    // 播报开机语音
+    execute_actions(1u << YAKKA_ACTION_PLAY_AUDIO_BOOT, 100, 4100);
+
+    // 7. 主事件与动画调度循环 (步长 40ms = 25 FPS)
+    uint32_t last_tick_ms = now_ms;
+    uint32_t last_bat_ms = now_ms;
+    int bat_soc = 100;
+    int bat_mv = 4100;
+
+    for (;;) {
+        app_event_t event;
+        // 等待事件，最长 40ms 超时保证 25fps 动效平滑刷新
+        if (xQueueReceive(s_event_queue, &event, pdMS_TO_TICKS(40)) == pdTRUE) {
+            now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+            uint32_t actions = 0;
+
+            if (event.type == EV_BUTTON) {
+                actions = yakka_machine_on_button(&s_machine, event.btn, event.is_press, event.is_click, now_ms);
+                // 同步音量设置
+                audio_player_set_volume(s_machine.volume);
+                audio_player_set_sens((audio_sens_t)s_machine.mic_sensitivity);
+            } else if (event.type == EV_VOICE) {
+                actions = yakka_machine_on_voice_detected(&s_machine, now_ms);
+            }
+
+            execute_actions(actions, bat_soc, bat_mv);
+        }
+
+        now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+
+        // 定期状态机 Tick (每 50ms)
+        if (now_ms - last_tick_ms >= 50) {
+            last_tick_ms = now_ms;
+            uint32_t actions = yakka_machine_tick(&s_machine, now_ms);
+            execute_actions(actions, bat_soc, bat_mv);
+        }
+
+        // 定期电量读取 (每 10 秒)
+        if (now_ms - last_bat_ms >= 10000) {
+            last_bat_ms = now_ms;
+            bat_soc = bsp_battery_soc();
+            bat_mv = bsp_battery_mv();
+        }
+
+        // 动效刷新 (25 FPS)
+        if (s_machine.state == YAKKA_STATE_SUCCESS) {
+            if (bsp_lvgl_lock(30)) {
+                ui_yakka_confetti_step();
+                bsp_lvgl_unlock();
+            }
+        } else if (s_machine.state == YAKKA_STATE_QUESTION || s_machine.state == YAKKA_STATE_ENCOURAGE_RETRY) {
+            if (bsp_lvgl_lock(30)) {
+                ui_yakka_pulse_step(now_ms);
+                bsp_lvgl_unlock();
+            }
         }
     }
-    s_ok[2] = (bsp_audio_init() == ESP_OK);
-    s_ok[3] = (bsp_battery_init() == ESP_OK);
-    s_ok[4] = true;                                    // 页面内按需初始化并显示错误
-    s_ok[5] = true;
-    s_ok[6] = true;
-
-    if (bsp_lvgl_lock(1000)) {
-        enter_menu();
-        bsp_lvgl_unlock();
-        s_input_ready = true;
-    }
-
-    ESP_LOGI(TAG, "就绪:Display=%d Button=%d Audio=%d Battery=%d",
-             s_ok[0], s_ok[1], s_ok[2], s_ok[3]);
 }
