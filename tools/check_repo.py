@@ -33,7 +33,10 @@ ROOT_MARKDOWN_ALLOWLIST = {
     "CLAUDE.zh_CN.md",
     "README.md",
     "README.zh_CN.md",
+    "PRD.md",
+    "PRD.zh_CN.md",
 }
+
 # Register only concrete, vendored component directories, e.g. "components/foo".
 # These exemptions never change the input to sensitive-content/conflict checks.
 VENDORED_DOC_ROOTS: tuple[str, ...] = ()

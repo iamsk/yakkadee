@@ -11,3 +11,9 @@ managed_components/
 /.agents/skills/passport-build
 /.agents/skills/passport-device-test
 /.agents/skills/passport-debug
+
+# Environment variables & secrets
+.env
+.env.*
+*.env
+
