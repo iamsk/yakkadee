@@ -231,7 +231,8 @@ void ui_yakka_update(const yakka_machine_t *m, int battery_soc, int battery_mv) 
         lv_obj_add_flag(s_pulse_ring, LV_OBJ_FLAG_HIDDEN);
 
         // 更新 5 行内容与光标
-        const char *vol_str = m->volume == YAKKA_VOL_LOW ? "低 40%" : (m->volume == YAKKA_VOL_MED ? "中 60%" : "高 80%");
+        const char *vol_str = m->volume == YAKKA_VOL_LOW ? "低 60%" : (m->volume == YAKKA_VOL_MED ? "中 80%" : "高 100%");
+        const char *bl_str = m->backlight_percent == 25 ? "护眼 25%" : (m->backlight_percent == 50 ? "标准 50%" : "明亮 75%");
         const char *sens_str = m->mic_sensitivity == YAKKA_MIC_SENS_LOW ? "低" : (m->mic_sensitivity == YAKKA_MIC_SENS_MED ? "中" : "高");
         const char *loop_str = m->selected_vocab_loop == YAKKA_LOOP_ALL ? "全部 5 词" : yakka_vocab_name((yakka_vocab_t)m->selected_vocab_loop);
 
@@ -243,10 +244,10 @@ void ui_yakka_update(const yakka_machine_t *m, int battery_soc, int battery_mv) 
 
             lv_obj_set_style_bg_color(row, lv_color_hex(is_selected ? COLOR_SELECT_BAR : COLOR_PARENT_BG), 0);
 
-            if (i == 0) snprintf(item_buf, sizeof(item_buf), "音量限制: %s", vol_str);
-            else if (i == 1) snprintf(item_buf, sizeof(item_buf), "麦克风灵敏度: %s", sens_str);
-            else if (i == 2) snprintf(item_buf, sizeof(item_buf), "词汇循环: %s", loop_str);
-            else if (i == 3) snprintf(item_buf, sizeof(item_buf), "立即睡午觉 (休眠)");
+            if (i == 0) snprintf(item_buf, sizeof(item_buf), "主音量: %s", vol_str);
+            else if (i == 1) snprintf(item_buf, sizeof(item_buf), "背光亮度: %s", bl_str);
+            else if (i == 2) snprintf(item_buf, sizeof(item_buf), "麦克风灵敏度: %s", sens_str);
+            else if (i == 3) snprintf(item_buf, sizeof(item_buf), "词汇循环: %s", loop_str);
             else if (i == 4) snprintf(item_buf, sizeof(item_buf), "保存并退出");
 
             if (lbl) lv_label_set_text(lbl, item_buf);

@@ -20,8 +20,10 @@ class YakkaFontCoverageTest(unittest.TestCase):
         # 检查家长菜单与系统提示的所有汉字
         required_chars = (
             "家长模式"
-            "音量限制"
+            "主音量"
             "低中高"
+            "背光亮度"
+            "标准护眼明亮"
             "麦克风灵敏度"
             "词汇循环"
             "全部"
@@ -30,6 +32,7 @@ class YakkaFontCoverageTest(unittest.TestCase):
             "退出"
             "电量"
             "按住上下键解锁"
+            "长按确认键"
         )
         missing = [c for c in required_chars if c not in cjk_chars]
         self.assertEqual(len(missing), 0, f"缺失字形: {missing}")

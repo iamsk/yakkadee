@@ -35,6 +35,7 @@ typedef struct {
     int btn;
     bool is_press;
     bool is_click;
+    bool is_long;
 } app_event_t;
 
 static yakka_machine_t s_machine;
@@ -58,12 +59,14 @@ static void on_key(bsp_btn_t btn, bsp_btn_ev_t ev, void *user) {
     event.btn = (int)btn;
     event.is_press = (ev == BSP_BTN_PRESS);
     event.is_click = (ev == BSP_BTN_CLICK);
+    event.is_long = (ev == BSP_BTN_LONG);
 
-    // 仅捕获 PRESS、CLICK 以及 RELEASE (用于双键释放判定)
-    if (ev == BSP_BTN_PRESS || ev == BSP_BTN_CLICK || ev == BSP_BTN_RELEASE) {
+    // 捕获 PRESS、CLICK、LONG 以及 RELEASE
+    if (ev == BSP_BTN_PRESS || ev == BSP_BTN_CLICK || ev == BSP_BTN_LONG || ev == BSP_BTN_RELEASE) {
         if (ev == BSP_BTN_RELEASE) {
             event.is_press = false;
             event.is_click = false;
+            event.is_long = false;
         }
         (void)xQueueSend(s_event_queue, &event, 0);
     }
@@ -79,13 +82,13 @@ static void on_voice_detected_cb(void *user) {
 static void execute_actions(uint32_t actions, int battery_soc, int battery_mv) {
     if (actions == 0) return;
 
-    // 1. 背光控制 (睡午觉断电黑屏 vs 正常护眼亮度)
+    // 1. 背光控制 (睡午觉微光夜灯 vs 正常护眼亮度)
     if (actions & (1u << YAKKA_ACTION_SET_BACKLIGHT)) {
         if (s_machine.state == YAKKA_STATE_NAP_TIME && s_machine.nap_screen_dimmed) {
-            ESP_LOGI(TAG, "Dee 睡午觉，关闭背光熄屏");
-            bsp_display_backlight(0);
+            ESP_LOGI(TAG, "Dee 睡午觉，开启 10%% 微光安抚夜灯");
+            bsp_display_backlight(10);
         } else {
-            bsp_display_backlight(EYE_CARE_BACKLIGHT_PERCENT);
+            bsp_display_backlight(s_machine.backlight_percent);
         }
     }
 
@@ -153,9 +156,6 @@ void app_main(void) {
         return;
     }
 
-    // 护眼底层光学控制: 锁定 25% 舒适背光
-    bsp_display_backlight(EYE_CARE_BACKLIGHT_PERCENT);
-
     // 2. 初始化音频与电池
     bsp_audio_init();
     bsp_battery_init();
@@ -163,6 +163,9 @@ void app_main(void) {
     // 3. 初始化状态机
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     yakka_machine_init(&s_machine, now_ms);
+
+    // 护眼底层光学控制: 初始舒适背光
+    bsp_display_backlight(s_machine.backlight_percent);
 
     // 4. 初始化音频引擎
     audio_player_init(s_machine.volume);
@@ -201,7 +204,7 @@ void app_main(void) {
             uint32_t actions = 0;
 
             if (event.type == EV_BUTTON) {
-                actions = yakka_machine_on_button(&s_machine, event.btn, event.is_press, event.is_click, now_ms);
+                actions = yakka_machine_on_button(&s_machine, event.btn, event.is_press, event.is_click, event.is_long, now_ms);
                 // 同步音量设置
                 audio_player_set_volume(s_machine.volume);
                 audio_player_set_sens((audio_sens_t)s_machine.mic_sensitivity);

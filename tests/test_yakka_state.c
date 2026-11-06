@@ -94,12 +94,12 @@ static void test_anti_touch_pop_sound(void) {
     uint32_t now = 1000;
     yakka_machine_init(&m, now);
 
-    // 幼童疯狂按键或长按: 状态绝不被打断，仅发出触觉水滴啵啵声
-    uint32_t act = yakka_machine_on_button(&m, 2 /* OK */, true /* press */, false, now);
+    // 幼童拍按或短按: 状态绝不被打断，仅发出触觉水滴啵啵声
+    uint32_t act = yakka_machine_on_button(&m, 2 /* OK */, true /* press */, false, false, now);
     assert(m.state == YAKKA_STATE_BOOT_INTRO);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_POP));
 
-    act = yakka_machine_on_button(&m, 0 /* UP */, true /* press */, false, now + 100);
+    act = yakka_machine_on_button(&m, 0 /* UP */, true /* press */, false, false, now + 100);
     assert(m.state == YAKKA_STATE_BOOT_INTRO);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_POP));
 
@@ -111,29 +111,24 @@ static void test_parent_unlock_gesture(void) {
     uint32_t now = 1000;
     yakka_machine_init(&m, now);
 
-    // 单按 UP: 不解锁
-    yakka_machine_on_button(&m, 0 /* UP */, true, false, now);
-    yakka_machine_tick(&m, now + 1000);
+    // 单按/短按 OK: 不解锁
+    yakka_machine_on_button(&m, 2 /* OK */, true, true, false /* not long */, now);
     assert(m.state != YAKKA_STATE_PARENT_MENU);
 
-    // 同时按住 UP + DOWN 持续 3000ms
-    yakka_machine_on_button(&m, 1 /* DOWN */, true, false, now + 1000);
-    yakka_machine_tick(&m, now + 2000); // 持续 1000ms
-    assert(m.state != YAKKA_STATE_PARENT_MENU);
-
-    uint32_t act = yakka_machine_tick(&m, now + 4001); // 持续 3001ms -> 解锁!
+    // 长按 OK 键 (is_long = true) -> 解锁进入家长菜单!
+    uint32_t act = yakka_machine_on_button(&m, 2 /* OK */, true, false, true /* is_long */, now + 1000);
     assert(m.state == YAKKA_STATE_PARENT_MENU);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_PARENT_ON));
     assert(m.parent_unlocked);
 
     // 在家长菜单中调节音量: 游标 0 处按 OK
     m.parent_menu_cursor = 0;
-    assert(m.volume == YAKKA_VOL_MED);
-    yakka_machine_on_button(&m, 2 /* OK */, false, true /* click */, now + 4100);
     assert(m.volume == YAKKA_VOL_HIGH);
+    yakka_machine_on_button(&m, 2 /* OK */, false, true /* click */, false, now + 1100);
+    assert(m.volume == YAKKA_VOL_LOW);
 
     // 8 秒无操作 -> 自动退出家长菜单并锁死
-    act = yakka_machine_tick(&m, now + 4100 + 8000);
+    act = yakka_machine_tick(&m, now + 1100 + 8000);
     assert(m.state == YAKKA_STATE_VOCAB_INTRO);
     assert(!m.parent_unlocked);
 
@@ -145,8 +140,8 @@ static void test_nap_time_lock(void) {
     uint32_t now = 1000;
     yakka_machine_init(&m, now);
 
-    // 模拟连续完成 6 组词汇
-    m.completed_vocab_count = 5;
+    // 模拟连续完成 25 组词汇触发午睡
+    m.completed_vocab_count = 24;
     m.state = YAKKA_STATE_SUCCESS;
     m.state_enter_time_ms = now;
 
@@ -156,18 +151,18 @@ static void test_nap_time_lock(void) {
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_NAP));
     assert(!m.nap_screen_dimmed);
 
-    // 3 秒哈欠动画后 -> 屏幕彻底熄灭黑屏断电
+    // 3 秒哈欠动画后 -> 进入微光安抚夜灯状态
     now += 2500;
     act = yakka_machine_tick(&m, now + 3000);
     assert(m.nap_screen_dimmed);
     assert(act & (1u << YAKKA_ACTION_SET_BACKLIGHT));
 
-    // 锁屏期间任何常规按键均不唤醒
-    act = yakka_machine_on_button(&m, 2, true, false, now + 5000);
+    // 锁屏期间短按仅发出轻微提示
+    act = yakka_machine_on_button(&m, 2, true, false, false, now + 5000);
     assert(m.state == YAKKA_STATE_NAP_TIME);
 
-    // 3 分钟 (180,000ms) 睡饱饱后自动醒来
-    act = yakka_machine_tick(&m, now + 180000);
+    // 家长长按 OK 键随时唤醒!
+    act = yakka_machine_on_button(&m, 2, true, false, true /* is_long */, now + 6000);
     assert(m.state == YAKKA_STATE_BOOT_INTRO);
     assert(m.completed_vocab_count == 0);
     assert(!m.nap_screen_dimmed);

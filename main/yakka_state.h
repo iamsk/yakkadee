@@ -29,15 +29,15 @@ typedef enum {
     YAKKA_STATE_QUESTION,         // 阶段三: You say it! 开启麦克风侦听 (最长 6.0s)
     YAKKA_STATE_SUCCESS,          // 阶段四: 正向大爆发! 彩带 + 欢呼 (2.5s)
     YAKKA_STATE_ENCOURAGE_RETRY,  // 阶段四(静默): 温和鼓励重试 "Say DOG!" (最长 4.0s)
-    YAKKA_STATE_NAP_TIME,         // 生理防沉迷: Dee 睡午觉啦 (5分钟/6词触发, 锁3分钟)
-    YAKKA_STATE_PARENT_MENU,      // 家长设置菜单 (上+下 按住3秒进入)
+    YAKKA_STATE_NAP_TIME,         // 生理防沉迷: Dee 睡午觉啦 (15分钟/25词触发, 温和微光睡眠)
+    YAKKA_STATE_PARENT_MENU,      // 家长设置菜单 (长按 OK 键 2 秒进入)
 } yakka_state_t;
 
-// 音量档位 (硬性限制 <= 80% 保护幼儿听力)
+// 音量档位 (60% / 80% / 100%)
 typedef enum {
-    YAKKA_VOL_LOW = 40,
-    YAKKA_VOL_MED = 60,
-    YAKKA_VOL_HIGH = 80,
+    YAKKA_VOL_LOW = 60,
+    YAKKA_VOL_MED = 80,
+    YAKKA_VOL_HIGH = 100,
 } yakka_volume_t;
 
 // 麦克风灵敏度档位
@@ -63,19 +63,16 @@ typedef struct {
     // 防沉迷计数
     uint32_t play_start_time_ms;      // 连续游戏开始时间戳
     uint32_t completed_vocab_count;   // 本轮已完成的词汇数
-    bool nap_screen_dimmed;           // 睡午觉是否已熄屏断电
+    bool nap_screen_dimmed;           // 睡午觉是否已进入微光睡眠
 
     // 家长设置
     yakka_volume_t volume;
+    uint8_t backlight_percent;        // 背光亮度 (25% / 50% / 75%)
     yakka_mic_sens_t mic_sensitivity;
     int selected_vocab_loop;          // YAKKA_LOOP_ALL 或特定词汇
     uint32_t last_parent_action_ms;   // 家长最后操作时间戳 (8秒无操作自动重锁)
     int parent_menu_cursor;           // 家长菜单当前高亮项 (0..4)
 
-    // 上+下 双键长按解锁判定
-    bool up_pressed;
-    bool down_pressed;
-    uint32_t combo_start_time_ms;
     bool parent_unlocked;
 } yakka_machine_t;
 
@@ -114,7 +111,8 @@ uint32_t yakka_machine_on_voice_detected(yakka_machine_t *m, uint32_t now_ms);
 // btn: 0=UP, 1=DOWN, 2=OK
 // is_press: true=按下, false=松开
 // is_click: true=单击
-uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, bool is_click, uint32_t now_ms);
+// is_long: true=长按 (>= 500ms)
+uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, bool is_click, bool is_long, uint32_t now_ms);
 
 // 获取当前词汇名称 (如 "DOG")
 const char *yakka_vocab_name(yakka_vocab_t vocab);

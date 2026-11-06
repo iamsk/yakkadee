@@ -176,10 +176,15 @@ def tts_to_pcm(text: str, voice: str = "Flo") -> list[int]:
             tmp_wav.unlink()
 
 def write_pcm(path: Path, samples: list[int]):
+    max_val = max(abs(x) for x in samples) if samples else 0
+    if max_val > 0 and path.name != "audio_pop.pcm":
+        # 归一化至接近满幅 -0.5 dBFS (~31000)，保证小扬声器发音饱满清脆
+        gain = 31000.0 / max_val
+        samples = [int(x * gain) for x in samples]
     clamped = [max(-32768, min(32767, int(x))) for x in samples]
     raw = struct.pack(f"<{len(clamped)}h", *clamped)
     path.write_bytes(raw)
-    print(f"Generated {path.name}: {len(raw)} bytes ({len(clamped)/SAMPLE_RATE:.2f}s)")
+    print(f"Generated {path.name}: {len(raw)} bytes ({len(clamped)/SAMPLE_RATE:.2f}s, peak {max(abs(x) for x in clamped)})")
 
 # -------------------------------------------------------------
 # 生成全部词汇与系统语音包

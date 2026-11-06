@@ -9,11 +9,10 @@
 #define QUESTION_TIMEOUT_MS     6000
 #define RETRY_TIMEOUT_MS        4000
 #define SUCCESS_DURATION_MS     2500
-#define NAP_TRIGGER_TIME_MS     300000  // 5 分钟
-#define NAP_TRIGGER_WORDS       6       // 6 组词汇
+#define NAP_TRIGGER_TIME_MS     900000  // 15 分钟
+#define NAP_TRIGGER_WORDS       25      // 25 组词汇
 #define NAP_ANIM_DURATION_MS    3000    // 睡前打哈欠动画
-#define NAP_TOTAL_LOCK_MS       180000  // 锁屏休眠 3 分钟
-#define PARENT_UNLOCK_HOLD_MS   3000    // 上+下 按住 3 秒解锁
+#define NAP_TOTAL_LOCK_MS       180000  // 休眠 3 分钟
 #define PARENT_AUTO_LOCK_MS     8000    // 8 秒无操作自动重锁
 
 static const char *s_vocab_names[YAKKA_VOCAB_COUNT] = {
@@ -54,7 +53,8 @@ void yakka_machine_init(yakka_machine_t *m, uint32_t now_ms) {
     m->nap_screen_dimmed = false;
 
     // 出厂默认设置
-    m->volume = YAKKA_VOL_MED;             // 60% 安全音量
+    m->volume = YAKKA_VOL_HIGH;            // 默认 100% 饱满音量
+    m->backlight_percent = 50;             // 默认 50% 清晰护眼亮度
     m->mic_sensitivity = YAKKA_MIC_SENS_MED;
     m->selected_vocab_loop = YAKKA_LOOP_ALL;
     m->parent_menu_cursor = 0;
@@ -82,28 +82,7 @@ uint32_t yakka_machine_tick(yakka_machine_t *m, uint32_t now_ms) {
     uint32_t actions = 0;
     uint32_t elapsed = now_ms - m->state_enter_time_ms;
 
-    // 1. 检查家长双键按住解锁
-    if (m->up_pressed && m->down_pressed && m->state != YAKKA_STATE_PARENT_MENU) {
-        if (m->combo_start_time_ms == 0) {
-            m->combo_start_time_ms = now_ms;
-        } else if (now_ms - m->combo_start_time_ms >= PARENT_UNLOCK_HOLD_MS) {
-            // 解锁成功! 进入家长菜单
-            m->state = YAKKA_STATE_PARENT_MENU;
-            m->state_enter_time_ms = now_ms;
-            m->last_parent_action_ms = now_ms;
-            m->parent_unlocked = true;
-            m->combo_start_time_ms = 0;
-            actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_PARENT_ON);
-            actions |= (1u << YAKKA_ACTION_UPDATE_UI);
-            actions |= (1u << YAKKA_ACTION_STOP_MIC);
-            actions |= (1u << YAKKA_ACTION_SET_BACKLIGHT); // 确保背光亮起
-            return actions;
-        }
-    } else {
-        m->combo_start_time_ms = 0;
-    }
-
-    // 2. 家长菜单状态: 8秒无操作自动重锁退出
+    // 1. 家长菜单状态: 8秒无操作自动重锁退出
     if (m->state == YAKKA_STATE_PARENT_MENU) {
         if (now_ms - m->last_parent_action_ms >= PARENT_AUTO_LOCK_MS) {
             // 自动重锁并回到游戏主线
@@ -112,14 +91,15 @@ uint32_t yakka_machine_tick(yakka_machine_t *m, uint32_t now_ms) {
             m->state_enter_time_ms = now_ms;
             actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO);
             actions |= (1u << YAKKA_ACTION_UPDATE_UI);
+            actions |= (1u << YAKKA_ACTION_SET_BACKLIGHT);
         }
         return actions;
     }
 
-    // 3. 睡午觉状态
+    // 2. 睡午觉状态
     if (m->state == YAKKA_STATE_NAP_TIME) {
         if (!m->nap_screen_dimmed && elapsed >= NAP_ANIM_DURATION_MS) {
-            // 动画播放完毕，关闭背光黑屏断电
+            // 动画播放完毕，调暗背光进入微光安抚睡眠
             m->nap_screen_dimmed = true;
             actions |= (1u << YAKKA_ACTION_SET_BACKLIGHT);
         }
@@ -137,7 +117,7 @@ uint32_t yakka_machine_tick(yakka_machine_t *m, uint32_t now_ms) {
         return actions;
     }
 
-    // 4. 正常幼童零按键流转状态机
+    // 3. 正常幼童零按键流转状态机
     switch (m->state) {
         case YAKKA_STATE_BOOT_INTRO:
             if (elapsed >= BOOT_DURATION_MS) {
@@ -259,40 +239,61 @@ uint32_t yakka_machine_on_voice_detected(yakka_machine_t *m, uint32_t now_ms) {
     return 0;
 }
 
-uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, bool is_click, uint32_t now_ms) {
+uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, bool is_click, bool is_long, uint32_t now_ms) {
     if (!m) return 0;
     uint32_t actions = 0;
 
-    // 记录按键按压状态 (btn: 0=UP, 1=DOWN, 2=OK)
-    if (btn == 0) m->up_pressed = is_press;
-    if (btn == 1) m->down_pressed = is_press;
-
-    // 维护双键同时按下的起始时间戳
-    if (m->up_pressed && m->down_pressed) {
-        if (m->combo_start_time_ms == 0) {
-            m->combo_start_time_ms = now_ms;
+    // 1. 睡午觉状态下:
+    if (m->state == YAKKA_STATE_NAP_TIME) {
+        // 长按 OK 键 (btn == 2) 随时唤醒 Dee
+        if (is_long && btn == 2) {
+            m->state = YAKKA_STATE_BOOT_INTRO;
+            m->state_enter_time_ms = now_ms;
+            m->play_start_time_ms = now_ms;
+            m->completed_vocab_count = 0;
+            m->nap_screen_dimmed = false;
+            actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_BOOT);
+            actions |= (1u << YAKKA_ACTION_UPDATE_UI);
+            actions |= (1u << YAKKA_ACTION_SET_BACKLIGHT);
+            return actions;
         }
-    } else {
-        m->combo_start_time_ms = 0;
-    }
-
-    // 幼儿玩耍模式下: 幼童拍按任何单键仅发出轻柔水滴啵啵声，绝不打断业务流程
-    if (m->state != YAKKA_STATE_PARENT_MENU) {
         if (is_press) {
             actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_POP);
         }
         return actions;
     }
 
-    // --- 以下为家长模式 (YAKKA_STATE_PARENT_MENU) 按键控制 ---
+    // 2. 非家长模式 (幼儿交互流)
+    if (m->state != YAKKA_STATE_PARENT_MENU) {
+        // 长按中间 OK 键 (btn == 2) 解锁进入家长菜单!
+        if (is_long && btn == 2) {
+            m->state = YAKKA_STATE_PARENT_MENU;
+            m->state_enter_time_ms = now_ms;
+            m->last_parent_action_ms = now_ms;
+            m->parent_unlocked = true;
+            actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_PARENT_ON);
+            actions |= (1u << YAKKA_ACTION_UPDATE_UI);
+            actions |= (1u << YAKKA_ACTION_STOP_MIC);
+            actions |= (1u << YAKKA_ACTION_SET_BACKLIGHT);
+            return actions;
+        }
+
+        // 幼童拍按任何单键仅发出轻柔水滴啵啵声，绝不打断业务流程
+        if (is_press) {
+            actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_POP);
+        }
+        return actions;
+    }
+
+    // 3. 家长模式 (YAKKA_STATE_PARENT_MENU) 按键控制
     m->last_parent_action_ms = now_ms;
 
     if (is_click) {
         // 菜单项:
-        // 0: 音量调节 (40% -> 60% -> 80% -> 40%)
-        // 1: 麦克风灵敏度 (低 -> 中 -> 高 -> 低)
-        // 2: 词汇循环 (全部 -> DOG -> BANANA -> DUCK -> CAR -> APPLE -> 全部)
-        // 3: 立即睡午觉 / 休眠
+        // 0: 音量调节 (60% -> 80% -> 100% -> 60%)
+        // 1: 背光亮度 (25% -> 50% -> 75% -> 25%)
+        // 2: 麦克风灵敏度 (低 -> 中 -> 高 -> 低)
+        // 3: 词汇循环 (全部 -> DOG -> BANANA -> DUCK -> CAR -> APPLE -> 全部)
         // 4: 保存并退出
         if (btn == 0) { // UP
             m->parent_menu_cursor = (m->parent_menu_cursor + 4) % 5;
@@ -310,10 +311,16 @@ uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, boo
                     else if (m->volume == YAKKA_VOL_MED) m->volume = YAKKA_VOL_HIGH;
                     else m->volume = YAKKA_VOL_LOW;
                     break;
-                case 1: // 麦克风灵敏度
+                case 1: // 背光亮度
+                    if (m->backlight_percent == 25) m->backlight_percent = 50;
+                    else if (m->backlight_percent == 50) m->backlight_percent = 75;
+                    else m->backlight_percent = 25;
+                    actions |= (1u << YAKKA_ACTION_SET_BACKLIGHT);
+                    break;
+                case 2: // 麦克风灵敏度
                     m->mic_sensitivity = (yakka_mic_sens_t)((m->mic_sensitivity + 1) % 3);
                     break;
-                case 2: // 词汇循环
+                case 3: // 词汇循环
                     m->selected_vocab_loop++;
                     if (m->selected_vocab_loop >= YAKKA_VOCAB_COUNT) {
                         m->selected_vocab_loop = YAKKA_LOOP_ALL;
@@ -322,18 +329,12 @@ uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, boo
                         m->current_vocab = (yakka_vocab_t)m->selected_vocab_loop;
                     }
                     break;
-                case 3: // 立即睡午觉
-                    m->state = YAKKA_STATE_NAP_TIME;
-                    m->state_enter_time_ms = now_ms;
-                    m->nap_screen_dimmed = false;
-                    actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_NAP);
-                    actions |= (1u << YAKKA_ACTION_UPDATE_UI);
-                    return actions;
                 case 4: // 保存并退出
                     m->state = YAKKA_STATE_VOCAB_INTRO;
                     m->state_enter_time_ms = now_ms;
                     actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO);
                     actions |= (1u << YAKKA_ACTION_UPDATE_UI);
+                    actions |= (1u << YAKKA_ACTION_SET_BACKLIGHT);
                     return actions;
             }
             actions |= (1u << YAKKA_ACTION_UPDATE_UI);
