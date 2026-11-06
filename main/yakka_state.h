@@ -19,6 +19,20 @@ typedef enum {
     YAKKA_VOCAB_COUNT,
 } yakka_vocab_t;
 
+// 时序节奏配置规范 (幼儿舒缓护眼节拍)
+#define YAKKA_BOOT_DURATION_MS        4500  // 开机引导欢迎 (4.5s)
+#define YAKKA_VOCAB_INTRO_DURATION_MS 3000  // 阶段一: 引出词汇认知展示 (3.0s)
+#define YAKKA_CONTRAST_DURATION_MS    3000  // 阶段二: 趣味反差三连变各卡片时长 (3.0s)
+#define YAKKA_QUESTION_TIMEOUT_MS     10000 // 阶段三: 提问后留足 7.5s 聆听宝宝发声 (10.0s)
+#define YAKKA_RETRY_TIMEOUT_MS        8000  // 阶段四(静默): 温和提醒后留足 6.5s 等待 (8.0s)
+#define YAKKA_SUCCESS_DURATION_MS     3500  // 阶段四: 正向大爆发彩带欢呼庆祝 (3.5s)
+#define YAKKA_NAP_TRIGGER_TIME_MS     900000 // 15 分钟连续使用触发小睡
+#define YAKKA_NAP_TRIGGER_WORDS       25    // 25 组词汇触发小睡
+#define YAKKA_NAP_ANIM_DURATION_MS    3000  // 打哈欠入睡动画
+#define YAKKA_NAP_TOTAL_LOCK_MS       180000 // 微光小睡锁定时长 3 分钟
+#define YAKKA_PARENT_AUTO_LOCK_MS     8000  // 家长菜单 8 秒无操作自动重锁
+
+
 // 主交互流程状态
 typedef enum {
     YAKKA_STATE_BOOT_INTRO = 0,   // 开机引导: "Yakka Dee, talk talk talk!" (2.0s)

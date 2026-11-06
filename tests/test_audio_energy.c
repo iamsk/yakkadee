@@ -55,14 +55,12 @@ static void test_energy_trigger_duration_gate(void) {
     triggered = audio_energy_feed(&det, quiet_buf, 512, &cur_rms);
     assert(!triggered);
 
-    // 3. 持续发声 (连续喂入 4 块 = 128ms >= 120ms): 必须在第 4 块准确触发成功!
-    triggered = audio_energy_feed(&det, loud_buf, 512, &cur_rms); // 32ms
-    assert(!triggered);
-    triggered = audio_energy_feed(&det, loud_buf, 512, &cur_rms); // 64ms
-    assert(!triggered);
-    triggered = audio_energy_feed(&det, loud_buf, 512, &cur_rms); // 96ms
-    assert(!triggered);
-    triggered = audio_energy_feed(&det, loud_buf, 512, &cur_rms); // 128ms -> 触发!
+    // 3. 持续发声 (连续喂入 7 块 = 224ms >= 200ms): 必须在持续达到门限后准确触发成功!
+    for (int i = 0; i < 6; i++) {
+        triggered = audio_energy_feed(&det, loud_buf, 512, &cur_rms);
+        assert(!triggered);
+    }
+    triggered = audio_energy_feed(&det, loud_buf, 512, &cur_rms); // 第 7 块 (224ms) -> 触发!
     assert(triggered);
 
     printf("test_energy_trigger_duration_gate: PASS\n");
@@ -72,20 +70,20 @@ static void test_sensitivity_levels(void) {
     audio_energy_detector_t det;
     audio_energy_init(&det, 16000, AUDIO_SENS_HIGH);
 
-    // 高灵敏度: 较小声音即可触发
+    // 高灵敏度: 较轻发音 (RMS 约 850) 即可触发
     int16_t soft_buf[512];
-    for (int i = 0; i < 512; i++) soft_buf[i] = (int16_t)(500 * sin(i * 0.1)); // RMS 约 350
+    for (int i = 0; i < 512; i++) soft_buf[i] = (int16_t)(1200 * sin(i * 0.1)); // RMS 约 850
     float cur_rms;
 
     bool triggered = false;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 7; i++) {
         triggered = audio_energy_feed(&det, soft_buf, 512, &cur_rms);
     }
     assert(triggered); // 高灵敏度应触发
 
-    // 低灵敏度: 同样的声音不应触发
+    // 低灵敏度: 同样的发音不应触发
     audio_energy_init(&det, 16000, AUDIO_SENS_LOW);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 7; i++) {
         triggered = audio_energy_feed(&det, soft_buf, 512, &cur_rms);
     }
     assert(!triggered); // 低灵敏度不触发

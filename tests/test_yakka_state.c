@@ -12,48 +12,48 @@ static void test_zero_button_flow(void) {
     assert(m.state == YAKKA_STATE_BOOT_INTRO);
     assert(m.current_vocab == YAKKA_VOCAB_DOG);
 
-    // 1. 开机引导 2 秒后自动进入 VOCAB_INTRO
-    uint32_t act = yakka_machine_tick(&m, now + 1999);
+    // 1. 开机引导 4.5 秒后自动进入 VOCAB_INTRO
+    uint32_t act = yakka_machine_tick(&m, now + YAKKA_BOOT_DURATION_MS - 1);
     assert(m.state == YAKKA_STATE_BOOT_INTRO);
-    act = yakka_machine_tick(&m, now + 2000);
+    act = yakka_machine_tick(&m, now + YAKKA_BOOT_DURATION_MS);
     assert(m.state == YAKKA_STATE_VOCAB_INTRO);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO));
 
-    // 2. 引出词汇 1.5 秒后进入对比 1 (Big dog)
-    now += 2000;
-    act = yakka_machine_tick(&m, now + 1500);
+    // 2. 引出词汇 3.0 秒后进入对比 1 (Big dog)
+    now += YAKKA_BOOT_DURATION_MS;
+    act = yakka_machine_tick(&m, now + YAKKA_VOCAB_INTRO_DURATION_MS);
     assert(m.state == YAKKA_STATE_CONTRAST_1);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_CONTRAST_1));
 
     // 3. 对比 1 -> 对比 2 (Tiny dog)
-    now += 1500;
-    act = yakka_machine_tick(&m, now + 1500);
+    now += YAKKA_VOCAB_INTRO_DURATION_MS;
+    act = yakka_machine_tick(&m, now + YAKKA_CONTRAST_DURATION_MS);
     assert(m.state == YAKKA_STATE_CONTRAST_2);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_CONTRAST_2));
 
     // 4. 对比 2 -> 对比 3 (Silly dog)
-    now += 1500;
-    act = yakka_machine_tick(&m, now + 1500);
+    now += YAKKA_CONTRAST_DURATION_MS;
+    act = yakka_machine_tick(&m, now + YAKKA_CONTRAST_DURATION_MS);
     assert(m.state == YAKKA_STATE_CONTRAST_3);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_CONTRAST_3));
 
     // 5. 对比 3 -> 提问 (You say it! 启动麦克风侦听)
-    now += 1500;
-    act = yakka_machine_tick(&m, now + 1500);
+    now += YAKKA_CONTRAST_DURATION_MS;
+    act = yakka_machine_tick(&m, now + YAKKA_CONTRAST_DURATION_MS);
     assert(m.state == YAKKA_STATE_QUESTION);
     assert(act & (1u << YAKKA_ACTION_START_MIC));
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_QUESTION));
 
     // 6. 宝宝大声发音: 触发 SUCCESS (彩带 + 欢呼)
-    now += 1500;
+    now += YAKKA_CONTRAST_DURATION_MS;
     act = yakka_machine_on_voice_detected(&m, now + 500);
     assert(m.state == YAKKA_STATE_SUCCESS);
     assert(act & (1u << YAKKA_ACTION_STOP_MIC));
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_SUCCESS));
 
-    // 7. 庆祝 2.5 秒后自动流转至下一词 (BANANA)
+    // 7. 庆祝 3.5 秒后自动流转至下一词 (BANANA)
     now += 500;
-    act = yakka_machine_tick(&m, now + 2500);
+    act = yakka_machine_tick(&m, now + YAKKA_SUCCESS_DURATION_MS);
     assert(m.state == YAKKA_STATE_VOCAB_INTRO);
     assert(m.current_vocab == YAKKA_VOCAB_BANANA);
     assert(m.completed_vocab_count == 1);
@@ -71,16 +71,16 @@ static void test_silence_fallback(void) {
     m.state = YAKKA_STATE_QUESTION;
     m.state_enter_time_ms = now;
 
-    // 静默 6 秒超时 -> 自动进入温和鼓励重试 (不报错)
-    uint32_t act = yakka_machine_tick(&m, now + 5999);
+    // 静默 10 秒超时 -> 自动进入温和鼓励重试 (不报错)
+    uint32_t act = yakka_machine_tick(&m, now + YAKKA_QUESTION_TIMEOUT_MS - 1);
     assert(m.state == YAKKA_STATE_QUESTION);
-    act = yakka_machine_tick(&m, now + 6000);
+    act = yakka_machine_tick(&m, now + YAKKA_QUESTION_TIMEOUT_MS);
     assert(m.state == YAKKA_STATE_ENCOURAGE_RETRY);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_RETRY));
 
-    // 重试阶段静默 4 秒超时 -> 播放轻快转场口哨，平滑切至下一词
-    now += 6000;
-    act = yakka_machine_tick(&m, now + 4000);
+    // 重试阶段静默 8 秒超时 -> 播放轻快转场口哨，平滑切至下一词
+    now += YAKKA_QUESTION_TIMEOUT_MS;
+    act = yakka_machine_tick(&m, now + YAKKA_RETRY_TIMEOUT_MS);
     assert(m.state == YAKKA_STATE_VOCAB_INTRO);
     assert(m.current_vocab == YAKKA_VOCAB_BANANA);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_SKIP));
@@ -146,13 +146,13 @@ static void test_nap_time_lock(void) {
     m.state_enter_time_ms = now;
 
     // 庆祝结束 -> 触发“Dee 要睡午觉啦”
-    uint32_t act = yakka_machine_tick(&m, now + 2500);
+    uint32_t act = yakka_machine_tick(&m, now + YAKKA_SUCCESS_DURATION_MS);
     assert(m.state == YAKKA_STATE_NAP_TIME);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_NAP));
     assert(!m.nap_screen_dimmed);
 
     // 3 秒哈欠动画后 -> 进入微光安抚夜灯状态
-    now += 2500;
+    now += YAKKA_SUCCESS_DURATION_MS;
     act = yakka_machine_tick(&m, now + 3000);
     assert(m.nap_screen_dimmed);
     assert(act & (1u << YAKKA_ACTION_SET_BACKLIGHT));

@@ -4,8 +4,8 @@
 #include <math.h>
 #include <string.h>
 
-#define DEFAULT_MIN_TRIGGER_MS 120
-#define INITIAL_NOISE_FLOOR    150.0f
+#define DEFAULT_MIN_TRIGGER_MS 200
+#define INITIAL_NOISE_FLOOR    200.0f
 
 void audio_energy_init(audio_energy_detector_t *det, uint32_t sample_rate, audio_sens_t sens) {
     if (!det) return;
@@ -42,20 +42,20 @@ static float get_threshold(const audio_energy_detector_t *det) {
     float multiplier;
     switch (det->sensitivity) {
         case AUDIO_SENS_HIGH:
-            base_thresh = 200.0f;
+            base_thresh = 600.0f;
             multiplier = 1.4f;
             break;
         case AUDIO_SENS_LOW:
-            base_thresh = 700.0f;
+            base_thresh = 1800.0f;
             multiplier = 2.4f;
             break;
         case AUDIO_SENS_MED:
         default:
-            base_thresh = 350.0f;
+            base_thresh = 1100.0f;
             multiplier = 1.8f;
             break;
     }
-    float dynamic_thresh = det->noise_floor_rms * multiplier + (base_thresh * 0.5f);
+    float dynamic_thresh = det->noise_floor_rms * multiplier + (base_thresh * 0.4f);
     return dynamic_thresh > base_thresh ? dynamic_thresh : base_thresh;
 }
 

@@ -26,6 +26,7 @@ static QueueHandle_t s_play_queue = NULL;
 
 static volatile bool s_cancel_play = false;
 static volatile bool s_is_playing = false;
+static volatile TickType_t s_last_play_end_tick = 0;
 
 static volatile bool s_mic_active = false;
 static yakka_voice_detected_cb_t s_voice_cb = NULL;
@@ -71,6 +72,7 @@ static void audio_play_task(void *arg) {
         }
 
         s_is_playing = false;
+        s_last_play_end_tick = xTaskGetTickCount();
         if (req.is_pop) {
             // 恢复正常音量
             bsp_audio_set_volume(s_current_volume);
@@ -88,6 +90,16 @@ static void audio_mic_task(void *arg) {
             continue;
         }
 
+        // 扬声器回声消除保护:
+        // 若当前正在播放提示音，或刚播完未满 600ms（房间余音与板载振动消散期），
+        // 强制重置能量探测器并丢弃数据，坚决杜绝“设备听到自己的喇叭声误触发”!
+        TickType_t now_tick = xTaskGetTickCount();
+        if (s_is_playing || (now_tick - s_last_play_end_tick < pdMS_TO_TICKS(600))) {
+            audio_energy_reset_trigger(&s_detector);
+            vTaskDelay(pdMS_TO_TICKS(30));
+            continue;
+        }
+
         // 侦听读取 512 采样 (32ms)
         esp_err_t err = bsp_audio_read(rec_buf, sizeof(rec_buf));
         if (err != ESP_OK) {
@@ -97,9 +109,15 @@ static void audio_mic_task(void *arg) {
 
         if (!s_mic_active) continue;
 
+        // 再次校验播放状态，防止读取期间突然启动播放
+        if (s_is_playing || (xTaskGetTickCount() - s_last_play_end_tick < pdMS_TO_TICKS(600))) {
+            audio_energy_reset_trigger(&s_detector);
+            continue;
+        }
+
         float rms = 0.0f;
         if (audio_energy_feed(&s_detector, rec_buf, AUDIO_CHUNK_SAMPLES, &rms)) {
-            ESP_LOGI(TAG, "检测到宝宝发声! RMS=%.1f", rms);
+            ESP_LOGI(TAG, "检测到宝宝真实发声! RMS=%.1f", rms);
             if (s_voice_cb) {
                 s_voice_cb(s_voice_user);
             }
@@ -108,7 +126,7 @@ static void audio_mic_task(void *arg) {
 }
 
 esp_err_t audio_player_init(uint8_t default_volume) {
-    s_current_volume = default_volume > 80 ? 80 : (default_volume < 20 ? 20 : default_volume);
+    s_current_volume = default_volume > 100 ? 100 : (default_volume < 20 ? 20 : default_volume);
 
     esp_err_t err = bsp_audio_set_format(AUDIO_SAMPLE_RATE, 16, 1);
     if (err != ESP_OK) {

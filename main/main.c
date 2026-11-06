@@ -79,8 +79,30 @@ static void on_voice_detected_cb(void *user) {
     (void)xQueueSend(s_event_queue, &event, 0);
 }
 
+static const char *state_to_str(yakka_state_t st) {
+    switch (st) {
+        case YAKKA_STATE_BOOT_INTRO: return "BOOT_INTRO";
+        case YAKKA_STATE_VOCAB_INTRO: return "VOCAB_INTRO";
+        case YAKKA_STATE_CONTRAST_1: return "CONTRAST_1";
+        case YAKKA_STATE_CONTRAST_2: return "CONTRAST_2";
+        case YAKKA_STATE_CONTRAST_3: return "CONTRAST_3";
+        case YAKKA_STATE_QUESTION: return "QUESTION";
+        case YAKKA_STATE_SUCCESS: return "SUCCESS";
+        case YAKKA_STATE_ENCOURAGE_RETRY: return "ENCOURAGE_RETRY";
+        case YAKKA_STATE_NAP_TIME: return "NAP_TIME";
+        case YAKKA_STATE_PARENT_MENU: return "PARENT_MENU";
+        default: return "UNKNOWN";
+    }
+}
+
 static void execute_actions(uint32_t actions, int battery_soc, int battery_mv) {
     if (actions == 0) return;
+
+    static yakka_state_t s_prev_state = YAKKA_STATE_BOOT_INTRO;
+    if (s_machine.state != s_prev_state) {
+        ESP_LOGI(TAG, "状态流转: %s -> %s (词汇: %d)", state_to_str(s_prev_state), state_to_str(s_machine.state), (int)s_machine.current_vocab);
+        s_prev_state = s_machine.state;
+    }
 
     // 1. 背光控制 (睡午觉微光夜灯 vs 正常护眼亮度)
     if (actions & (1u << YAKKA_ACTION_SET_BACKLIGHT)) {
