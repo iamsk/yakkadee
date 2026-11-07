@@ -58,6 +58,12 @@ void yakka_machine_init(yakka_machine_t *m, uint32_t now_ms) {
     m->mic_sensitivity = YAKKA_MIC_SENS_MED;
     m->selected_vocab_loop = YAKKA_LOOP_ALL;
     m->parent_menu_cursor = 0;
+    m->parent_unlocked = false;
+
+    // 发声响应延迟初始化
+    m->voice_pending = false;
+    m->voice_first_heard_ms = 0;
+    m->voice_last_heard_ms = 0;
 }
 
 static yakka_vocab_t get_next_vocab(const yakka_machine_t *m) {
@@ -159,6 +165,7 @@ uint32_t yakka_machine_tick(yakka_machine_t *m, uint32_t now_ms) {
             if (elapsed >= CONTRAST_DURATION_MS) {
                 m->state = YAKKA_STATE_QUESTION;
                 m->state_enter_time_ms = now_ms;
+                m->voice_pending = false;
                 actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_QUESTION);
                 actions |= (1u << YAKKA_ACTION_START_MIC);
                 actions |= (1u << YAKKA_ACTION_UPDATE_UI);
@@ -166,40 +173,51 @@ uint32_t yakka_machine_tick(yakka_machine_t *m, uint32_t now_ms) {
             break;
 
         case YAKKA_STATE_QUESTION:
-            // 等待出声或 6 秒超时
-            if (elapsed >= QUESTION_TIMEOUT_MS) {
+            if (m->voice_pending) {
+                // 侦测到宝宝发音，等待念完并留足自然停顿 (防打断/防抢话)
+                uint32_t speech_dur = now_ms - m->voice_first_heard_ms;
+                uint32_t silence_gap = now_ms - m->voice_last_heard_ms;
+                if ((speech_dur >= YAKKA_VOICE_MIN_DELAY_MS && silence_gap >= YAKKA_VOICE_SILENCE_GAP_MS) ||
+                    (speech_dur >= YAKKA_VOICE_MAX_WAIT_MS)) {
+                    m->voice_pending = false;
+                    m->state = YAKKA_STATE_SUCCESS;
+                    m->state_enter_time_ms = now_ms;
+                    actions |= (1u << YAKKA_ACTION_STOP_MIC);
+                    actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_SUCCESS);
+                    actions |= (1u << YAKKA_ACTION_UPDATE_UI);
+                }
+            } else if (elapsed >= QUESTION_TIMEOUT_MS) {
                 // 静默超时: 进入温和鼓励
                 m->state = YAKKA_STATE_ENCOURAGE_RETRY;
                 m->state_enter_time_ms = now_ms;
+                m->voice_pending = false;
                 actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_RETRY);
                 actions |= (1u << YAKKA_ACTION_UPDATE_UI);
             }
             break;
 
         case YAKKA_STATE_ENCOURAGE_RETRY:
-            // 再次等待 4 秒，若仍未出声则无痛平滑跳到下一词
-            if (elapsed >= RETRY_TIMEOUT_MS) {
-                actions |= (1u << YAKKA_ACTION_STOP_MIC);
-                actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_SKIP);
-                m->completed_vocab_count++;
-                if (check_nap_time_trigger(m, now_ms)) {
-                    m->state = YAKKA_STATE_NAP_TIME;
+            if (m->voice_pending) {
+                // 侦测到宝宝发音，等待念完并留足自然停顿
+                uint32_t speech_dur = now_ms - m->voice_first_heard_ms;
+                uint32_t silence_gap = now_ms - m->voice_last_heard_ms;
+                if ((speech_dur >= YAKKA_VOICE_MIN_DELAY_MS && silence_gap >= YAKKA_VOICE_SILENCE_GAP_MS) ||
+                    (speech_dur >= YAKKA_VOICE_MAX_WAIT_MS)) {
+                    m->voice_pending = false;
+                    m->state = YAKKA_STATE_SUCCESS;
                     m->state_enter_time_ms = now_ms;
-                    m->nap_screen_dimmed = false;
-                    actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_NAP);
-                    actions |= (1u << YAKKA_ACTION_UPDATE_UI);
-                } else {
-                    m->current_vocab = get_next_vocab(m);
-                    m->state = YAKKA_STATE_VOCAB_INTRO;
-                    m->state_enter_time_ms = now_ms;
-                    actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO);
+                    actions |= (1u << YAKKA_ACTION_STOP_MIC);
+                    actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_SUCCESS);
                     actions |= (1u << YAKKA_ACTION_UPDATE_UI);
                 }
             }
+            // 鼓励重试等待超时后: 暂停在此处!
+            // 绝不自动跳词，麦克风保持侦听，耐心地等待宝宝发声，或由家长按键控制 (OK 键重听提示，上下键手动换词)
             break;
 
         case YAKKA_STATE_SUCCESS:
             if (elapsed >= SUCCESS_DURATION_MS) {
+                m->voice_pending = false;
                 m->completed_vocab_count++;
                 if (check_nap_time_trigger(m, now_ms)) {
                     m->state = YAKKA_STATE_NAP_TIME;
@@ -228,13 +246,12 @@ uint32_t yakka_machine_on_voice_detected(yakka_machine_t *m, uint32_t now_ms) {
     if (!m) return 0;
     // 仅在提问阶段或重试鼓励阶段响应声音
     if (m->state == YAKKA_STATE_QUESTION || m->state == YAKKA_STATE_ENCOURAGE_RETRY) {
-        m->state = YAKKA_STATE_SUCCESS;
-        m->state_enter_time_ms = now_ms;
-        uint32_t actions = 0;
-        actions |= (1u << YAKKA_ACTION_STOP_MIC);
-        actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_SUCCESS);
-        actions |= (1u << YAKKA_ACTION_UPDATE_UI);
-        return actions;
+        if (!m->voice_pending) {
+            m->voice_pending = true;
+            m->voice_first_heard_ms = now_ms;
+        }
+        m->voice_last_heard_ms = now_ms;
+        // 不立刻打断宝宝说话，由 tick 函数在宝宝念完并自然停顿后平滑进入 SUCCESS
     }
     return 0;
 }
@@ -267,6 +284,7 @@ uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, boo
     if (m->state != YAKKA_STATE_PARENT_MENU) {
         // 长按中间 OK 键 (btn == 2) 解锁进入家长菜单!
         if (is_long && btn == 2) {
+            m->voice_pending = false;
             m->state = YAKKA_STATE_PARENT_MENU;
             m->state_enter_time_ms = now_ms;
             m->last_parent_action_ms = now_ms;
@@ -276,6 +294,44 @@ uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, boo
             actions |= (1u << YAKKA_ACTION_STOP_MIC);
             actions |= (1u << YAKKA_ACTION_SET_BACKLIGHT);
             return actions;
+        }
+
+        // 提问或重试暂停阶段的按键响应:
+        if (m->state == YAKKA_STATE_QUESTION || m->state == YAKKA_STATE_ENCOURAGE_RETRY) {
+            if (is_click) {
+                if (btn == 2) {
+                    // OK 键单击: 重新播放当前提示语音 (再次鼓励宝宝读)
+                    m->voice_pending = false;
+                    m->state_enter_time_ms = now_ms;
+                    if (m->state == YAKKA_STATE_ENCOURAGE_RETRY) {
+                        actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_RETRY);
+                    } else {
+                        actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_QUESTION);
+                    }
+                    actions |= (1u << YAKKA_ACTION_UPDATE_UI);
+                    return actions;
+                } else if (btn == 1 || btn == 0) {
+                    // 下键或上键单击: 手动跳到下一词汇 (方便家长切词)
+                    m->voice_pending = false;
+                    actions |= (1u << YAKKA_ACTION_STOP_MIC);
+                    actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_SKIP);
+                    m->completed_vocab_count++;
+                    if (check_nap_time_trigger(m, now_ms)) {
+                        m->state = YAKKA_STATE_NAP_TIME;
+                        m->state_enter_time_ms = now_ms;
+                        m->nap_screen_dimmed = false;
+                        actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_NAP);
+                        actions |= (1u << YAKKA_ACTION_UPDATE_UI);
+                    } else {
+                        m->current_vocab = get_next_vocab(m);
+                        m->state = YAKKA_STATE_VOCAB_INTRO;
+                        m->state_enter_time_ms = now_ms;
+                        actions |= (1u << YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO);
+                        actions |= (1u << YAKKA_ACTION_UPDATE_UI);
+                    }
+                    return actions;
+                }
+            }
         }
 
         // 幼童拍按任何单键仅发出轻柔水滴啵啵声，绝不打断业务流程

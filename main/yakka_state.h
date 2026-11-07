@@ -26,6 +26,9 @@ typedef enum {
 #define YAKKA_QUESTION_TIMEOUT_MS     10000 // 阶段三: 提问后留足 7.5s 聆听宝宝发声 (10.0s)
 #define YAKKA_RETRY_TIMEOUT_MS        8000  // 阶段四(静默): 温和提醒后留足 6.5s 等待 (8.0s)
 #define YAKKA_SUCCESS_DURATION_MS     3500  // 阶段四: 正向大爆发彩带欢呼庆祝 (3.5s)
+#define YAKKA_VOICE_MIN_DELAY_MS      800   // 宝宝开口后至少等待 800ms (保证完整读出词汇不被打断)
+#define YAKKA_VOICE_SILENCE_GAP_MS    400   // 词尾自然静默停顿判定 (400ms 无新发声确认念完)
+#define YAKKA_VOICE_MAX_WAIT_MS       1800  // 最长发音等待上限 (1.8s)，防止长音拖太久
 #define YAKKA_NAP_TRIGGER_TIME_MS     900000 // 15 分钟连续使用触发小睡
 #define YAKKA_NAP_TRIGGER_WORDS       25    // 25 组词汇触发小睡
 #define YAKKA_NAP_ANIM_DURATION_MS    3000  // 打哈欠入睡动画
@@ -88,6 +91,11 @@ typedef struct {
     int parent_menu_cursor;           // 家长菜单当前高亮项 (0..4)
 
     bool parent_unlocked;
+
+    // 发声响应延迟与防抢话控制
+    bool voice_pending;               // 侦测到宝宝正在开口，等待念完
+    uint32_t voice_first_heard_ms;    // 宝宝开口起始时间戳
+    uint32_t voice_last_heard_ms;     // 宝宝最近一次发声时间戳
 } yakka_machine_t;
 
 // 状态机触发动作指令

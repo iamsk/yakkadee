@@ -44,15 +44,21 @@ static void test_zero_button_flow(void) {
     assert(act & (1u << YAKKA_ACTION_START_MIC));
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_QUESTION));
 
-    // 6. 宝宝大声发音: 触发 SUCCESS (彩带 + 欢呼)
+    // 6. 宝宝大声发音: 刚开口启动响应延迟，等待念完并自然停顿后触发 SUCCESS (彩带 + 欢呼)
     now += YAKKA_CONTRAST_DURATION_MS;
     act = yakka_machine_on_voice_detected(&m, now + 500);
+    assert(m.state == YAKKA_STATE_QUESTION); // 刚开口不打断，状态保持 QUESTION
+    assert(m.voice_pending);
+
+    // 宝宝完整念完单词，并自然停顿达到 YAKKA_VOICE_SILENCE_GAP_MS
+    now += 500;
+    act = yakka_machine_tick(&m, now + YAKKA_VOICE_MIN_DELAY_MS);
     assert(m.state == YAKKA_STATE_SUCCESS);
     assert(act & (1u << YAKKA_ACTION_STOP_MIC));
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_SUCCESS));
 
     // 7. 庆祝 3.5 秒后自动流转至下一词 (BANANA)
-    now += 500;
+    now += YAKKA_VOICE_MIN_DELAY_MS;
     act = yakka_machine_tick(&m, now + YAKKA_SUCCESS_DURATION_MS);
     assert(m.state == YAKKA_STATE_VOCAB_INTRO);
     assert(m.current_vocab == YAKKA_VOCAB_BANANA);
@@ -78,9 +84,20 @@ static void test_silence_fallback(void) {
     assert(m.state == YAKKA_STATE_ENCOURAGE_RETRY);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_RETRY));
 
-    // 重试阶段静默 8 秒超时 -> 播放轻快转场口哨，平滑切至下一词
+    // 重试阶段静默超时 -> 暂停在此处，绝不自动跳词!
     now += YAKKA_QUESTION_TIMEOUT_MS;
     act = yakka_machine_tick(&m, now + YAKKA_RETRY_TIMEOUT_MS);
+    assert(m.state == YAKKA_STATE_ENCOURAGE_RETRY); // 暂停在此处!
+    act = yakka_machine_tick(&m, now + YAKKA_RETRY_TIMEOUT_MS + 10000);
+    assert(m.state == YAKKA_STATE_ENCOURAGE_RETRY); // 10秒后依然暂停，耐心等待宝宝
+
+    // 家长单击 OK 键重听鼓励提示
+    act = yakka_machine_on_button(&m, 2 /* OK */, false, true /* is_click */, false, now + 15000);
+    assert(m.state == YAKKA_STATE_ENCOURAGE_RETRY);
+    assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_RETRY));
+
+    // 家长点击下键 (btn=1) 手动切词
+    act = yakka_machine_on_button(&m, 1, false, true /* is_click */, false, now + 20000);
     assert(m.state == YAKKA_STATE_VOCAB_INTRO);
     assert(m.current_vocab == YAKKA_VOCAB_BANANA);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_SKIP));
@@ -170,12 +187,49 @@ static void test_nap_time_lock(void) {
     printf("test_nap_time_lock: PASS\n");
 }
 
+static void test_voice_response_delay_and_retry_controls(void) {
+    yakka_machine_t m;
+    uint32_t now = 10000;
+    yakka_machine_init(&m, now);
+
+    // 1. 处于 QUESTION 状态
+    m.state = YAKKA_STATE_QUESTION;
+    m.state_enter_time_ms = now;
+
+    // 2. 宝宝刚开口: 触发 voice_detected，但不立刻进入 SUCCESS
+    uint32_t act = yakka_machine_on_voice_detected(&m, now + 100);
+    assert(act == 0); // 不产生过早欢呼动作
+    assert(m.state == YAKKA_STATE_QUESTION);
+    assert(m.voice_pending);
+
+    // 3. 宝宝正在发音 (多音节 "BA-NA-NA"，持续发出声响)
+    // 持续喂入语音事件
+    yakka_machine_on_voice_detected(&m, now + 300);
+    yakka_machine_on_voice_detected(&m, now + 600);
+    yakka_machine_on_voice_detected(&m, now + 900); // 900ms 时说完 "-NA"
+
+    // 4. 950ms 时: 虽然总耗时 850ms >= 800ms，但词尾自然停顿仅 50ms (< 400ms)，判定宝宝尚未念完，绝不提前庆祝!
+    act = yakka_machine_tick(&m, now + 950);
+    assert(m.state == YAKKA_STATE_QUESTION);
+    assert(act == 0);
+
+    // 5. 1300ms 时: 距离上次发声停顿达到 400ms (900 -> 1300 = 400ms)，且总时长 1200ms >= 800ms
+    // 判定宝宝已完整念完单词! 启动正向大爆发欢呼庆祝!
+    act = yakka_machine_tick(&m, now + 1300);
+    assert(m.state == YAKKA_STATE_SUCCESS);
+    assert(act & (1u << YAKKA_ACTION_STOP_MIC));
+    assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_SUCCESS));
+
+    printf("test_voice_response_delay_and_retry_controls: PASS\n");
+}
+
 int main(void) {
     test_zero_button_flow();
     test_silence_fallback();
     test_anti_touch_pop_sound();
     test_parent_unlock_gesture();
     test_nap_time_lock();
+    test_voice_response_delay_and_retry_controls();
     printf("ALL YAKKA STATE TESTS PASSED!\n");
     return 0;
 }
