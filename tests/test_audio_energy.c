@@ -140,6 +140,19 @@ static void test_environmental_noise_rejection(void) {
     }
     assert(triggered); // 温柔童声正常触发!
 
+    // 5. 成人 130Hz / 210Hz 发音 (覆盖家长跟读与测试): 必须宽泛灵敏响应!
+    int16_t adult_buf[512];
+    for (int i = 0; i < 512; i++) {
+        double t = (double)i / 16000.0;
+        adult_buf[i] = (int16_t)(1000.0 * sin(2.0 * M_PI * 130.0 * t) + 400.0 * sin(2.0 * M_PI * 260.0 * t));
+    }
+    audio_energy_reset_trigger(&det);
+    triggered = false;
+    for (int i = 0; i < 7; i++) {
+        triggered = audio_energy_feed(&det, adult_buf, 512, &cur_rms);
+    }
+    assert(triggered); // 成人男声基频正常触发!
+
     printf("test_environmental_noise_rejection: PASS\n");
 }
 

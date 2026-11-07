@@ -38,6 +38,29 @@ static const char *s_vocab_names[YAKKA_VOCAB_COUNT] = {
     "BED",
 };
 
+static const char *s_vocab_phrases[YAKKA_VOCAB_COUNT] = {
+    "Banana! Yellow banana!",
+    "Dog! Woof woof! Big dog!",
+    "Book! Look at the book!",
+    "Boots! Splash in the boots!",
+    "Bike! Ride the bike!",
+    "Duck! Quack quack! Little duck!",
+    "Cup! Drink from the cup!",
+    "Bus! Beep beep! The bus is here!",
+    "Peas! Green peas! Pop the peas!",
+    "Hat! Put on your hat!",
+    "Worm! Wiggly worm!",
+    "Boat! Float the boat!",
+    "House! In the house!",
+    "Lion! Roar! Big lion!",
+    "Apple! Crunch! Red apple!",
+    "Ball! Bounce the ball!",
+    "Mouse! Squeak! Little mouse!",
+    "Beans! Jumping beans!",
+    "Car! Vroom vroom! Fast car!",
+    "Bed! Sleepy time! Big bed!",
+};
+
 static const char *s_contrast_labels[YAKKA_VOCAB_COUNT][3] = {
     { "Big banana!", "Long banana!", "Yellow banana!" },
     { "Big dog!", "Tiny dog!", "Silly dog!" },
@@ -66,6 +89,11 @@ const char *yakka_vocab_name(yakka_vocab_t vocab) {
     return s_vocab_names[vocab];
 }
 
+const char *yakka_vocab_phrase(yakka_vocab_t vocab) {
+    if (vocab < 0 || vocab >= YAKKA_VOCAB_COUNT) return "";
+    return s_vocab_phrases[vocab];
+}
+
 const char *yakka_contrast_label(yakka_vocab_t vocab, int contrast_idx) {
     if (vocab < 0 || vocab >= YAKKA_VOCAB_COUNT) return "";
     if (contrast_idx < 0 || contrast_idx >= 3) return "";
@@ -85,7 +113,7 @@ void yakka_machine_init(yakka_machine_t *m, uint32_t now_ms) {
     // 出厂默认设置
     m->volume = YAKKA_VOL_HIGH;            // 默认 100% 饱满音量
     m->backlight_percent = 50;             // 默认 50% 清晰护眼亮度
-    m->mic_sensitivity = YAKKA_MIC_SENS_MED;
+    m->mic_sensitivity = YAKKA_MIC_SENS_HIGH; // 默认高灵敏度，宽泛拾音轻松开口
     m->selected_vocab_loop = YAKKA_LOOP_ALL;
     m->parent_menu_cursor = 0;
     m->parent_unlocked = false;

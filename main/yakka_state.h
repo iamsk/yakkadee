@@ -154,6 +154,9 @@ uint32_t yakka_machine_on_button(yakka_machine_t *m, int btn, bool is_press, boo
 // 获取当前词汇名称 (如 "DOG")
 const char *yakka_vocab_name(yakka_vocab_t vocab);
 
+// 获取当前词汇示例短语 (如 "Banana! Yellow banana!")
+const char *yakka_vocab_phrase(yakka_vocab_t vocab);
+
 // 获取当前词汇对比变体名称 (如 "Big dog", "Tiny dog", "Silly dog")
 const char *yakka_contrast_label(yakka_vocab_t vocab, int contrast_idx);
 

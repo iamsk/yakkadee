@@ -272,7 +272,7 @@ void ui_yakka_update(const yakka_machine_t *m, int battery_soc, int battery_mv) 
         case YAKKA_STATE_VOCAB_INTRO:
             lv_image_set_src(s_main_img, yakka_asset_get_image(m->current_vocab, YAKKA_STATE_VOCAB_INTRO));
             lv_label_set_text(s_title_label, vname);
-            lv_label_set_text(s_subtitle_label, "Let's talk about it!");
+            lv_label_set_text(s_subtitle_label, yakka_vocab_phrase(m->current_vocab));
             lv_obj_add_flag(s_pulse_ring, LV_OBJ_FLAG_HIDDEN);
             ui_yakka_show_confetti(false);
             break;

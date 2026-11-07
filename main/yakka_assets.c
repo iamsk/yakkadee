@@ -575,6 +575,16 @@ yakka_pcm_asset_t yakka_asset_audio_pop(void)       { return to_pcm_asset((bin_r
 yakka_pcm_asset_t yakka_asset_audio_parent_on(void) { return to_pcm_asset((bin_ref_t)MAKE_BIN_REF(audio_parent_on_adpcm)); }
 
 yakka_pcm_asset_t yakka_asset_get_audio(yakka_vocab_t vocab, yakka_action_t action) {
+    switch (action) {
+        case YAKKA_ACTION_PLAY_AUDIO_BOOT:      return yakka_asset_audio_boot();
+        case YAKKA_ACTION_PLAY_AUDIO_SUCCESS:   return yakka_asset_audio_cheer();
+        case YAKKA_ACTION_PLAY_AUDIO_SKIP:      return yakka_asset_audio_skip();
+        case YAKKA_ACTION_PLAY_AUDIO_NAP:       return yakka_asset_audio_nap();
+        case YAKKA_ACTION_PLAY_AUDIO_POP:       return yakka_asset_audio_pop();
+        case YAKKA_ACTION_PLAY_AUDIO_PARENT_ON: return yakka_asset_audio_parent_on();
+        default: break;
+    }
+
     if (vocab < 0 || vocab >= YAKKA_VOCAB_COUNT) return (yakka_pcm_asset_t){ .data = NULL, .size = 0, .is_adpcm = false };
     const vocab_audio_bundle_t *b = &s_vocab_audios[vocab];
     if (action == YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO) return to_pcm_asset(b->intro);

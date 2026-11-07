@@ -4,7 +4,13 @@
 
 # Yakka Dee Pocket Talker
 
-A specialized physical speech motivation toy tailored for **toddlers in their language burst period (around 2 years old)**. Powered by the **FoloToy AI Passport** (ESP32-C3 hardware architecture), operating **100% offline with zero network dependency, zero cloud latency, and instant play upon powering on**.
+<p align="center">
+  <img src="docs/images/cover.jpg" width="300" alt="Yakka Dee Pocket Talker Cover" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/images/gameplay.jpg" width="300" alt="Yakka Dee Pocket Talker Gameplay" />
+</p>
+
+A specialized physical speech motivation toy tailored for **toddlers in their language burst period (around 1–4 years old)**. Powered by the **FoloToy AI Passport** (ESP32-C3 hardware architecture), operating **100% offline with zero network dependency, zero cloud latency, and instant play upon powering on**.
 
 > **“Yakka Dee, Yakka Dee, talk, talk, talk! You say it!”**  
 > Say goodbye to passive screen addiction and eye strain—empower your child to speak up with joyful cheers!
@@ -14,28 +20,29 @@ A specialized physical speech motivation toy tailored for **toddlers in their la
 ## 🌟 Core Features & Child-Centric Design
 
 ### 1. Zero-Button Automated Interaction
-* **2-Year-Old Cognitive Adaptation**: Toddlers do not need to understand buttons, menus, or navigation. The state machine automatically plays prompts and advances through scenes.
-* **Acoustic Energy Detection**: An ES8311 I2S microphone continuously calculates short-time Root-Mean-Square (RMS) amplitude. As long as the toddler speaks, babbles, or shouts, **success is triggered within 100ms**!
-* **Slow-Motion Confetti Celebration**: Upon speaking, the screen bursts with gentle particle confetti accompanied by joyful cheers, reinforcing the causal relationship: *"I speak ➔ fireworks burst"*.
-* **Gentle Encouragement on Silence**: If the child stays silent, Dee gently repeats with a soft animal prompt. After timeout, it smoothly transitions to the next word without any frustrating buzzer or error sound.
+* **Toddler Cognitive Adaptation**: Toddlers do not need to understand buttons, menus, or navigation. The state machine automatically plays prompts and advances through scenes.
+* **Broadened Acoustic Voice Detection**: An ES8311 I2S microphone continuously calculates short-time RMS amplitude and harmonic pitch correlation across both adult and toddler vocal ranges (85Hz–800Hz). Whether it's a soft babble or an excited shout, speech is detected naturally!
+* **Pacing Protection & Delayed Celebration**: The system listens patiently until the toddler finishes saying the whole word, then rewards them with gentle particle confetti and joyful cheers.
+* **Pause on Silence**: If the child stays silent, Dee gently repeats with a prompt and then patiently pauses without frustrating buzzers or rushing.
 
-### 2. Medical-Grade Eye-Care Optics & Nap-Time Mode
-* **#F6F2E5 Warm Paper Background**: Eliminates harsh high-energy pure whites and high-contrast pitch blacks, providing a soothing reflection like paper picture books.
+### 2. Full Season 1 Curriculum (20 Words, 83 Illustrated Contrast Cards)
+* Complete Season 1 vocabulary: `banana, dog, book, boots, bike, duck, cup, bus, peas, hat, worm, boat, house, lion, apple, ball, mouse, beans, car, bed`.
+* Over **80 high-contrast 200×200 cartoon flashcards** rendered via high-efficiency TJPGD streaming JPEG decoder.
+* **126 authentic British English Flo voice audio clips** compressed with 4-bit IMA-ADPCM, fitting all audio and visuals within 3.6 MB flash while leaving 4.5 MB (55%) free headroom!
+
+### 3. Medical-Grade Eye-Care Optics & Nap-Time Mode
+* **#FFF9EE Warm Paper Background**: Eliminates harsh high-energy pure whites and high-contrast pitch blacks, providing a soothing reflection like paper picture books.
 * **High-Visibility 4px Bold Outlines**: 200×200 silhouettes fill 80% of the display, making shapes clear at a healthy 40–50cm distance to discourage leaning in close.
 * **15kHz High-Frequency Stroboscopic-Free PWM**: Backlight dimming frequency eliminates hidden ocular muscle fatigue.
-* **"Dee Takes a Nap" Anti-Addiction**: After 25 words or 15 minutes of inactivity, Dee yawns, hugs her brown teddy bear, and falls asleep (`Zzz...`). The screen softly dims to a **10% nightlight** rather than cutting off abruptly. Parents can wake Dee anytime with a **long press on the OK key**.
+* **"Dee Takes a Nap" Anti-Addiction**: After 20 words or extended play, Dee yawns, hugs her teddy bear, and falls asleep (`Zzz...`). The screen softly dims to a **10% nightlight** rather than cutting off abruptly. Parents can wake Dee anytime with a **long press on the OK key**.
 
-### 3. Anti-Touch Grab Shield & Parent Mode
+### 4. Anti-Touch Grab Shield & Parent Mode
 * **Complete Button Muting**: Normal toddler play completely disables button interruptions.
 * **Hold OK for 2s to Unlock Parent Menu**: Tailored for the single-channel ADC resistor ladder circuit on GPIO0, allowing parents to adjust:
-  * **Master Volume** (25% / 50% / 75% / 100%, 0 dBFS peak normalized);
-  * **Mic Sensitivity** (Low / Mid / High dynamic noise floor gating);
+  * **Master Volume** (60% / 80% / 100%);
+  * **Mic Sensitivity** (Low / Mid / High dynamic noise floor gating, High by default);
   * **Backlight Brightness** (25% / 50% / 75%);
-  * **Manual Vocabulary Selector**.
-
-### 4. Canonical BBC CBeebies Artwork
-* 100% faithful to the official character design by Chris Allen: Deepangali (Dee), South Asian toddler girl with straight bangs, red-scrunchie rotating pigtails, cerulean blue T-shirt with yellow lightning bolt ⚡, and red shorts.
-* All 22 illustrations generated via **Nano Banana 2.1** for authentic CBeebies picture book style across 5 foundational words: DOG, BANANA, CAR, DUCK, and APPLE.
+  * **Manual Vocabulary Selector** (Cycle through all 20 Season 1 words).
 
 ---
 

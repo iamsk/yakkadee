@@ -63,26 +63,26 @@ def pcm_to_adpcm(pcm_bytes):
     return bytes(out)
 
 CURRICULUM = [
-    {"id": "banana", "name": "Banana", "c1": "Big banana!", "c2": "Long banana!", "c3": "Yellow banana!"},
-    {"id": "dog",    "name": "Dog",    "c1": "Big dog!", "c2": "Tiny dog!", "c3": "Silly dog!"},
-    {"id": "book",   "name": "Book",   "c1": "Big book!", "c2": "Story book!", "c3": "Open book!"},
-    {"id": "boots",  "name": "Boots",  "c1": "Red boots!", "c2": "Muddy boots!", "c3": "Shiny boots!"},
-    {"id": "bike",   "name": "Bike",   "c1": "Fast bike!", "c2": "Little bike!", "c3": "Ring-ring bike!"},
-    {"id": "duck",   "name": "Duck",   "c1": "Swimming duck!", "c2": "Quacking duck!", "c3": "Yellow duck!"},
-    {"id": "cup",    "name": "Cup",    "c1": "Blue cup!", "c2": "Big cup!", "c3": "Sippy cup!"},
-    {"id": "bus",    "name": "Bus",    "c1": "Big bus!", "c2": "Red bus!", "c3": "Beep-beep bus!"},
-    {"id": "peas",   "name": "Peas",   "c1": "Green peas!", "c2": "Tiny peas!", "c3": "Sweet peas!"},
-    {"id": "hat",    "name": "Hat",    "c1": "Sun hat!", "c2": "Silly hat!", "c3": "Warm hat!"},
-    {"id": "worm",   "name": "Worm",   "c1": "Wiggly worm!", "c2": "Long worm!", "c3": "Earth worm!"},
-    {"id": "boat",   "name": "Boat",   "c1": "Sailing boat!", "c2": "Speed boat!", "c3": "Floating boat!"},
-    {"id": "house",  "name": "House",  "c1": "Cozy house!", "c2": "Tall house!", "c3": "Brick house!"},
-    {"id": "lion",   "name": "Lion",   "c1": "Roaring lion!", "c2": "Big lion!", "c3": "Golden lion!"},
-    {"id": "apple",  "name": "Apple",  "c1": "Red apple!", "c2": "Sweet apple!", "c3": "Crunchy apple!"},
-    {"id": "ball",   "name": "Ball",   "c1": "Bouncing ball!", "c2": "Round ball!", "c3": "Rolling ball!"},
-    {"id": "mouse",  "name": "Mouse",  "c1": "Little mouse!", "c2": "Squeaky mouse!", "c3": "Quiet mouse!"},
-    {"id": "beans",  "name": "Beans",  "c1": "Magic beans!", "c2": "Green beans!", "c3": "Jumping beans!"},
-    {"id": "car",    "name": "Car",    "c1": "Fast car!", "c2": "Red car!", "c3": "Beep-beep car!"},
-    {"id": "bed",    "name": "Bed",    "c1": "Soft bed!", "c2": "Sleepy bed!", "c3": "Cozy bed!"},
+    {"id": "banana", "name": "Banana", "phrase": "Banana! Yellow banana!", "c1": "Big banana!", "c2": "Long banana!", "c3": "Yellow banana!"},
+    {"id": "dog",    "name": "Dog",    "phrase": "Dog! Woof woof! Big dog!", "c1": "Big dog!", "c2": "Tiny dog!", "c3": "Silly dog!"},
+    {"id": "book",   "name": "Book",   "phrase": "Book! Look at the book!", "c1": "Big book!", "c2": "Story book!", "c3": "Open book!"},
+    {"id": "boots",  "name": "Boots",  "phrase": "Boots! Splash in the boots!", "c1": "Red boots!", "c2": "Muddy boots!", "c3": "Shiny boots!"},
+    {"id": "bike",   "name": "Bike",   "phrase": "Bike! Ride the bike!", "c1": "Fast bike!", "c2": "Little bike!", "c3": "Ring-ring bike!"},
+    {"id": "duck",   "name": "Duck",   "phrase": "Duck! Quack quack! Little duck!", "c1": "Swimming duck!", "c2": "Quacking duck!", "c3": "Yellow duck!"},
+    {"id": "cup",    "name": "Cup",    "phrase": "Cup! Drink from the cup!", "c1": "Blue cup!", "c2": "Big cup!", "c3": "Sippy cup!"},
+    {"id": "bus",    "name": "Bus",    "phrase": "Bus! Beep beep! The bus is here!", "c1": "Big bus!", "c2": "Red bus!", "c3": "Beep-beep bus!"},
+    {"id": "peas",   "name": "Peas",   "phrase": "Peas! Green peas! Pop the peas!", "c1": "Green peas!", "c2": "Tiny peas!", "c3": "Sweet peas!"},
+    {"id": "hat",    "name": "Hat",    "phrase": "Hat! Put on your hat!", "c1": "Sun hat!", "c2": "Silly hat!", "c3": "Warm hat!"},
+    {"id": "worm",   "name": "Worm",   "phrase": "Worm! Wiggly worm!", "c1": "Wiggly worm!", "c2": "Long worm!", "c3": "Earth worm!"},
+    {"id": "boat",   "name": "Boat",   "phrase": "Boat! Float the boat!", "c1": "Sailing boat!", "c2": "Speed boat!", "c3": "Floating boat!"},
+    {"id": "house",  "name": "House",  "phrase": "House! In the house!", "c1": "Cozy house!", "c2": "Tall house!", "c3": "Brick house!"},
+    {"id": "lion",   "name": "Lion",   "phrase": "Lion! Roar! Big lion!", "c1": "Roaring lion!", "c2": "Big lion!", "c3": "Golden lion!"},
+    {"id": "apple",  "name": "Apple",  "phrase": "Apple! Crunch! Red apple!", "c1": "Red apple!", "c2": "Sweet apple!", "c3": "Crunchy apple!"},
+    {"id": "ball",   "name": "Ball",   "phrase": "Ball! Bounce the ball!", "c1": "Bouncing ball!", "c2": "Round ball!", "c3": "Rolling ball!"},
+    {"id": "mouse",  "name": "Mouse",  "phrase": "Mouse! Squeak! Little mouse!", "c1": "Little mouse!", "c2": "Squeaky mouse!", "c3": "Quiet mouse!"},
+    {"id": "beans",  "name": "Beans",  "phrase": "Beans! Jumping beans!", "c1": "Magic beans!", "c2": "Green beans!", "c3": "Jumping beans!"},
+    {"id": "car",    "name": "Car",    "phrase": "Car! Vroom vroom! Fast car!", "c1": "Fast car!", "c2": "Red car!", "c3": "Beep-beep car!"},
+    {"id": "bed",    "name": "Bed",    "phrase": "Bed! Sleepy time! Big bed!", "c1": "Soft bed!", "c2": "Sleepy bed!", "c3": "Cozy bed!"},
 ]
 
 VOICE = "Flo (English (UK))"
@@ -128,7 +128,9 @@ def main():
     for item in CURRICULUM:
         w_id = item["id"]
         w_name = item["name"]
-        synthesize_clip(f"Let's talk about {w_name}! Look, a {w_name}!", f"audio_{w_id}_intro")
+        phrase = item["phrase"]
+        # 引出词汇展示：使用官方精炼短语
+        synthesize_clip(phrase, f"audio_{w_id}_intro")
         synthesize_clip(item["c1"], f"audio_{w_id}_c1")
         synthesize_clip(item["c2"], f"audio_{w_id}_c2")
         synthesize_clip(item["c3"], f"audio_{w_id}_c3")

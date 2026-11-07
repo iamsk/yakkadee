@@ -71,7 +71,7 @@ static bool is_human_voice_features(const int16_t *samples, size_t count, float 
     }
     float crest_factor = (float)peak / (rms + 1.0f);
     // 人声元音平滑波形通常为 1.2 ~ 4.2；拍桌子/敲击刺脉冲通常 > 4.5
-    if (crest_factor < 1.1f || crest_factor > 4.2f) {
+    if (crest_factor < 1.05f || crest_factor > 5.5f) {
         return false;
     }
 
@@ -85,13 +85,13 @@ static bool is_human_voice_features(const int16_t *samples, size_t count, float 
             zcr++;
         }
     }
-    if (zcr < 6 || zcr > 125) {
+    if (zcr < 4 || zcr > 135) {
         return false;
     }
 
     // 3. 幼儿声带基频周期性 (Harmonic Pitch Autocorrelation) 判定:
     // 幼儿发音声带基频在 200Hz ~ 600Hz 之间 (16kHz 下对应 lag = 26 .. 80 个采样点)
-    size_t max_calc = count > 80 ? (count - 80) : 0;
+    size_t max_calc = count > 160 ? (count - 160) : 0;
     if (max_calc == 0) return false;
 
     float r0_slice = 0.0f;
@@ -102,7 +102,7 @@ static bool is_human_voice_features(const int16_t *samples, size_t count, float 
     if (r0_slice < 500.0f) return false;
 
     float max_autocorr = 0.0f;
-    for (size_t lag = 26; lag <= 80; lag += 2) {
+    for (size_t lag = 20; lag <= 160; lag += 2) {
         float r_lag = 0.0f;
         for (size_t i = 0; i < max_calc; i += 2) {
             r_lag += (float)samples[i] * (float)samples[i + lag];
@@ -114,7 +114,7 @@ static bool is_human_voice_features(const int16_t *samples, size_t count, float 
     }
 
     // 人声在基频处具有强烈的周期相关性 (通常 > 0.40)；摩擦、敲击、环境杂音无相关性 (通常 < 0.20)
-    return (max_autocorr >= 0.32f);
+    return (max_autocorr >= 0.28f);
 }
 
 bool audio_energy_feed(audio_energy_detector_t *det, const int16_t *samples, size_t count, float *out_rms) {

@@ -3,6 +3,7 @@
 #include "yakka_state.h"
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 static void test_zero_button_flow(void) {
     yakka_machine_t m;
@@ -219,6 +220,10 @@ static void test_voice_response_delay_and_retry_controls(void) {
     assert(m.state == YAKKA_STATE_SUCCESS);
     assert(act & (1u << YAKKA_ACTION_STOP_MIC));
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_SUCCESS));
+
+    // 验证短语接口
+    assert(strcmp(yakka_vocab_phrase(YAKKA_VOCAB_BANANA), "Banana! Yellow banana!") == 0);
+    assert(strcmp(yakka_vocab_phrase(YAKKA_VOCAB_DOG), "Dog! Woof woof! Big dog!") == 0);
 
     printf("test_voice_response_delay_and_retry_controls: PASS\n");
 }
