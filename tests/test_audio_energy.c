@@ -91,10 +91,63 @@ static void test_sensitivity_levels(void) {
     printf("test_sensitivity_levels: PASS\n");
 }
 
+static void test_environmental_noise_rejection(void) {
+    audio_energy_detector_t det;
+    audio_energy_init(&det, 16000, AUDIO_SENS_MED);
+    float cur_rms;
+    bool triggered = false;
+
+    // 1. 拍桌子/敲击杂音 (瞬间尖峰，峰均比 Crest Factor 极高 > 4.5)
+    int16_t knock_buf[512] = {0};
+    knock_buf[10] = 8000;
+    knock_buf[11] = -5000;
+    knock_buf[12] = 2000;
+    for (int i = 0; i < 10; i++) {
+        triggered = audio_energy_feed(&det, knock_buf, 512, &cur_rms);
+        assert(!triggered); // 冲击刺音绝不误触发!
+    }
+
+    // 2. 空调/机器 50Hz 低频机械轰鸣 (每 32ms 过零点极少 ZCR < 6)
+    int16_t ac_buf[512];
+    for (int i = 0; i < 512; i++) {
+        ac_buf[i] = (int16_t)(2500 * sin(2.0 * M_PI * 50.0 * i / 16000.0)); // RMS 约 1767 (很大声)
+    }
+    for (int i = 0; i < 10; i++) {
+        triggered = audio_energy_feed(&det, ac_buf, 512, &cur_rms);
+        assert(!triggered); // 低频机械轰鸣绝不误触发!
+    }
+
+    // 3. 摩擦沙沙声 / 白噪声 (散漫杂音，无声带基频周期谐波)
+    int16_t noise_buf[512];
+    for (int i = 0; i < 512; i++) {
+        noise_buf[i] = (int16_t)(((i * 73 + 19) % 2000) - 1000); // 伪随机散漫信号
+    }
+    for (int i = 0; i < 10; i++) {
+        triggered = audio_energy_feed(&det, noise_buf, 512, &cur_rms);
+        assert(!triggered); // 散漫白噪绝不误触发!
+    }
+
+    // 4. 宝宝 350Hz 正常温柔童声发音 (RMS 约 700，声带周期明显): 必须灵敏响应!
+    int16_t child_buf[512];
+    for (int i = 0; i < 512; i++) {
+        // 350Hz 基频 + 700Hz 二次谐波
+        double t = (double)i / 16000.0;
+        child_buf[i] = (int16_t)(900.0 * sin(2.0 * M_PI * 350.0 * t) + 400.0 * sin(2.0 * M_PI * 700.0 * t));
+    }
+    triggered = false;
+    for (int i = 0; i < 7; i++) {
+        triggered = audio_energy_feed(&det, child_buf, 512, &cur_rms);
+    }
+    assert(triggered); // 温柔童声正常触发!
+
+    printf("test_environmental_noise_rejection: PASS\n");
+}
+
 int main(void) {
     test_rms_calculation();
     test_energy_trigger_duration_gate();
     test_sensitivity_levels();
+    test_environmental_noise_rejection();
     printf("ALL AUDIO ENERGY TESTS PASSED!\n");
     return 0;
 }
