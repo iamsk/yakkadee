@@ -87,6 +87,10 @@ run_static_checks() {
         tests/test_confetti.c main/confetti.c -lm \
         -o "${test_dir}/test_confetti"
     "${test_dir}/test_confetti"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_adpcm.c main/adpcm.c -lm \
+        -o "${test_dir}/test_adpcm"
+    "${test_dir}/test_adpcm"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_yakka_font.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_battery_profile.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_deep_sleep_contract.py

@@ -126,7 +126,7 @@ static void execute_actions(uint32_t actions, int battery_soc, int battery_mv) {
     // 3. 音效播放
     if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_POP)) {
         yakka_pcm_asset_t a = yakka_asset_audio_pop();
-        audio_player_play_pop(a.data, a.size);
+        audio_player_play_pop(a.data, a.size, a.is_adpcm);
     } else {
         yakka_action_t sound_act = YAKKA_ACTION_NONE;
         if (actions & (1u << YAKKA_ACTION_PLAY_AUDIO_BOOT)) sound_act = YAKKA_ACTION_PLAY_AUDIO_BOOT;
@@ -144,7 +144,7 @@ static void execute_actions(uint32_t actions, int battery_soc, int battery_mv) {
         if (sound_act != YAKKA_ACTION_NONE) {
             yakka_pcm_asset_t a = yakka_asset_get_audio(s_machine.current_vocab, sound_act);
             if (a.data && a.size > 0) {
-                audio_player_play(a.data, a.size, true);
+                audio_player_play(a.data, a.size, a.is_adpcm, true);
             }
         }
     }

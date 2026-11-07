@@ -20,12 +20,13 @@ esp_err_t audio_player_init(uint8_t default_volume);
 // 销毁音频任务
 void audio_player_deinit(void);
 
-// 异步播放一段 PCM 音频 (非阻塞)
+// 异步播放一段音频 (支持 16-bit PCM 或 4-bit IMA-ADPCM, 非阻塞)
+// is_adpcm: true 表示数据为 IMA-ADPCM 压缩音频，false 表示 raw PCM
 // interrupt: 是否打断当前正在播放的内容
-void audio_player_play(const void *pcm, size_t bytes, bool interrupt);
+void audio_player_play(const void *audio, size_t bytes, bool is_adpcm, bool interrupt);
 
 // 播放萌系轻柔按键啵啵声 (高优先级独立短音，10% 音量触觉反馈)
-void audio_player_play_pop(const void *pcm, size_t bytes);
+void audio_player_play_pop(const void *audio, size_t bytes, bool is_adpcm);
 
 // 停止当前所有播放
 void audio_player_stop(void);

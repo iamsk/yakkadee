@@ -1,6 +1,7 @@
 // main/audio_player.c
 // Yakka Dee 口袋开口机 —— 异步音频播放与麦克风侦听任务实现
 #include "audio_player.h"
+#include "adpcm.h"
 #include "bsp_audio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -17,6 +18,7 @@ static const char *TAG = "audio_player";
 typedef struct {
     const uint8_t *data;
     size_t size;
+    bool is_adpcm;
     bool is_pop;
 } audio_play_req_t;
 
@@ -55,20 +57,38 @@ static void audio_play_task(void *arg) {
             bsp_audio_set_volume(s_current_volume);
         }
 
-        size_t offset = 0;
-        size_t total = req.size;
-        const int16_t *src = (const int16_t *)req.data;
-        size_t total_samples = total / sizeof(int16_t);
+        if (req.is_adpcm) {
+            adpcm_state_t state;
+            adpcm_state_init(&state);
+            size_t in_offset = 0;
+            const size_t in_chunk_bytes = AUDIO_CHUNK_SAMPLES / 2;
 
-        while (offset < total_samples && !s_cancel_play) {
-            size_t n = (total_samples - offset) < AUDIO_CHUNK_SAMPLES ? (total_samples - offset) : AUDIO_CHUNK_SAMPLES;
-            memcpy(chunk, src + offset, n * sizeof(int16_t));
-            esp_err_t err = bsp_audio_write(chunk, n * sizeof(int16_t));
-            if (err != ESP_OK) {
-                ESP_LOGW(TAG, "bsp_audio_write 失败: %s", esp_err_to_name(err));
-                break;
+            while (in_offset < req.size && !s_cancel_play) {
+                size_t n_in = (req.size - in_offset) < in_chunk_bytes ? (req.size - in_offset) : in_chunk_bytes;
+                size_t n_samples = adpcm_decode_block(req.data + in_offset, n_in, chunk, &state);
+                esp_err_t err = bsp_audio_write(chunk, n_samples * sizeof(int16_t));
+                if (err != ESP_OK) {
+                    ESP_LOGW(TAG, "bsp_audio_write 失败: %s", esp_err_to_name(err));
+                    break;
+                }
+                in_offset += n_in;
             }
-            offset += n;
+        } else {
+            size_t offset = 0;
+            size_t total = req.size;
+            const int16_t *src = (const int16_t *)req.data;
+            size_t total_samples = total / sizeof(int16_t);
+
+            while (offset < total_samples && !s_cancel_play) {
+                size_t n = (total_samples - offset) < AUDIO_CHUNK_SAMPLES ? (total_samples - offset) : AUDIO_CHUNK_SAMPLES;
+                memcpy(chunk, src + offset, n * sizeof(int16_t));
+                esp_err_t err = bsp_audio_write(chunk, n * sizeof(int16_t));
+                if (err != ESP_OK) {
+                    ESP_LOGW(TAG, "bsp_audio_write 失败: %s", esp_err_to_name(err));
+                    break;
+                }
+                offset += n;
+            }
         }
 
         s_is_playing = false;
@@ -157,8 +177,8 @@ esp_err_t audio_player_init(uint8_t default_volume) {
     return ESP_OK;
 }
 
-void audio_player_play(const void *pcm, size_t bytes, bool interrupt) {
-    if (!pcm || bytes == 0 || !s_play_queue) return;
+void audio_player_play(const void *audio, size_t bytes, bool is_adpcm, bool interrupt) {
+    if (!audio || bytes == 0 || !s_play_queue) return;
 
     if (interrupt && s_is_playing) {
         s_cancel_play = true;
@@ -167,22 +187,24 @@ void audio_player_play(const void *pcm, size_t bytes, bool interrupt) {
     }
 
     audio_play_req_t req = {
-        .data = (const uint8_t *)pcm,
+        .data = (const uint8_t *)audio,
         .size = bytes,
+        .is_adpcm = is_adpcm,
         .is_pop = false,
     };
     xQueueSend(s_play_queue, &req, 0);
 }
 
-void audio_player_play_pop(const void *pcm, size_t bytes) {
-    if (!pcm || bytes == 0 || !s_play_queue) return;
+void audio_player_play_pop(const void *audio, size_t bytes, bool is_adpcm) {
+    if (!audio || bytes == 0 || !s_play_queue) return;
     // 只有在空闲或允许插队时快速发出轻柔啵啵声
     if (xQueueReceive(s_play_queue, &(audio_play_req_t){0}, 0) == pdTRUE) {
         // dropped stale item
     }
     audio_play_req_t req = {
-        .data = (const uint8_t *)pcm,
+        .data = (const uint8_t *)audio,
         .size = bytes,
+        .is_adpcm = is_adpcm,
         .is_pop = true,
     };
     xQueueSend(s_play_queue, &req, 0);

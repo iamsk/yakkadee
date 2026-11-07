@@ -4,6 +4,7 @@
 
 #include "lvgl.h"
 #include "yakka_state.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -19,6 +20,7 @@ extern "C" {
 typedef struct {
     const uint8_t *data;
     size_t size;
+    bool is_adpcm;
 } yakka_pcm_asset_t;
 
 // 获取词汇对应的图形

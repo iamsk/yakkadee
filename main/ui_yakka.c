@@ -234,7 +234,7 @@ void ui_yakka_update(const yakka_machine_t *m, int battery_soc, int battery_mv) 
         const char *vol_str = m->volume == YAKKA_VOL_LOW ? "低 60%" : (m->volume == YAKKA_VOL_MED ? "中 80%" : "高 100%");
         const char *bl_str = m->backlight_percent == 25 ? "护眼 25%" : (m->backlight_percent == 50 ? "标准 50%" : "明亮 75%");
         const char *sens_str = m->mic_sensitivity == YAKKA_MIC_SENS_LOW ? "低" : (m->mic_sensitivity == YAKKA_MIC_SENS_MED ? "中" : "高");
-        const char *loop_str = m->selected_vocab_loop == YAKKA_LOOP_ALL ? "全部 5 词" : yakka_vocab_name((yakka_vocab_t)m->selected_vocab_loop);
+        const char *loop_str = m->selected_vocab_loop == YAKKA_LOOP_ALL ? "全部 20 词" : yakka_vocab_name((yakka_vocab_t)m->selected_vocab_loop);
 
         char item_buf[64];
         for (int i = 0; i < 5; i++) {

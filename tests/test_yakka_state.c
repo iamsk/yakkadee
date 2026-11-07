@@ -10,7 +10,7 @@ static void test_zero_button_flow(void) {
     yakka_machine_init(&m, now);
 
     assert(m.state == YAKKA_STATE_BOOT_INTRO);
-    assert(m.current_vocab == YAKKA_VOCAB_DOG);
+    assert(m.current_vocab == YAKKA_VOCAB_BANANA);
 
     // 1. 开机引导 4.5 秒后自动进入 VOCAB_INTRO
     uint32_t act = yakka_machine_tick(&m, now + YAKKA_BOOT_DURATION_MS - 1);
@@ -61,7 +61,7 @@ static void test_zero_button_flow(void) {
     now += YAKKA_VOICE_MIN_DELAY_MS;
     act = yakka_machine_tick(&m, now + YAKKA_SUCCESS_DURATION_MS);
     assert(m.state == YAKKA_STATE_VOCAB_INTRO);
-    assert(m.current_vocab == YAKKA_VOCAB_BANANA);
+    assert(m.current_vocab == YAKKA_VOCAB_DOG);
     assert(m.completed_vocab_count == 1);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_VOCAB_INTRO));
 
@@ -99,7 +99,7 @@ static void test_silence_fallback(void) {
     // 家长点击下键 (btn=1) 手动切词
     act = yakka_machine_on_button(&m, 1, false, true /* is_click */, false, now + 20000);
     assert(m.state == YAKKA_STATE_VOCAB_INTRO);
-    assert(m.current_vocab == YAKKA_VOCAB_BANANA);
+    assert(m.current_vocab == YAKKA_VOCAB_DOG);
     assert(act & (1u << YAKKA_ACTION_PLAY_AUDIO_SKIP));
     assert(act & (1u << YAKKA_ACTION_STOP_MIC));
 

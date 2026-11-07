@@ -16,19 +16,49 @@
 #define PARENT_AUTO_LOCK_MS     YAKKA_PARENT_AUTO_LOCK_MS
 
 static const char *s_vocab_names[YAKKA_VOCAB_COUNT] = {
-    "DOG",
     "BANANA",
+    "DOG",
+    "BOOK",
+    "BOOTS",
+    "BIKE",
     "DUCK",
-    "CAR",
+    "CUP",
+    "BUS",
+    "PEAS",
+    "HAT",
+    "WORM",
+    "BOAT",
+    "HOUSE",
+    "LION",
     "APPLE",
+    "BALL",
+    "MOUSE",
+    "BEANS",
+    "CAR",
+    "BED",
 };
 
 static const char *s_contrast_labels[YAKKA_VOCAB_COUNT][3] = {
-    { "Big dog!", "Tiny dog!", "Silly dog!" },
     { "Big banana!", "Long banana!", "Yellow banana!" },
-    { "Swimming duck!", "Quacking duck!", "Flying duck!" },
+    { "Big dog!", "Tiny dog!", "Silly dog!" },
+    { "Big book!", "Story book!", "Open book!" },
+    { "Red boots!", "Muddy boots!", "Shiny boots!" },
+    { "Fast bike!", "Little bike!", "Ring-ring bike!" },
+    { "Swimming duck!", "Quacking duck!", "Yellow duck!" },
+    { "Blue cup!", "Big cup!", "Sippy cup!" },
+    { "Big bus!", "Red bus!", "Beep-beep bus!" },
+    { "Green peas!", "Tiny peas!", "Sweet peas!" },
+    { "Sun hat!", "Silly hat!", "Warm hat!" },
+    { "Wiggly worm!", "Long worm!", "Earth worm!" },
+    { "Sailing boat!", "Speed boat!", "Floating boat!" },
+    { "Cozy house!", "Tall house!", "Brick house!" },
+    { "Roaring lion!", "Big lion!", "Golden lion!" },
+    { "Red apple!", "Sweet apple!", "Crunchy apple!" },
+    { "Bouncing ball!", "Round ball!", "Rolling ball!" },
+    { "Little mouse!", "Squeaky mouse!", "Quiet mouse!" },
+    { "Magic beans!", "Green beans!", "Jumping beans!" },
     { "Fast car!", "Red car!", "Beep-beep car!" },
-    { "Red apple!", "Big apple!", "Yummy apple!" },
+    { "Soft bed!", "Sleepy bed!", "Cozy bed!" },
 };
 
 const char *yakka_vocab_name(yakka_vocab_t vocab) {
@@ -46,7 +76,7 @@ void yakka_machine_init(yakka_machine_t *m, uint32_t now_ms) {
     if (!m) return;
     memset(m, 0, sizeof(*m));
     m->state = YAKKA_STATE_BOOT_INTRO;
-    m->current_vocab = YAKKA_VOCAB_DOG;
+    m->current_vocab = YAKKA_VOCAB_BANANA;
     m->state_enter_time_ms = now_ms;
     m->play_start_time_ms = now_ms;
     m->completed_vocab_count = 0;
